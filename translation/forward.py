@@ -13,6 +13,7 @@ import logging
 
 from translation.config import TranslationConfig, UNSUPPORTED_FEATURES, STRIPPED_FEATURES
 from translation.tools import translate_tools as _translate_tools
+from enrichment.system_preamble import strip_anthropic_identity
 
 # Re-export so tests can import from translation.forward
 translate_tools = _translate_tools
@@ -77,7 +78,8 @@ def anthropic_to_openai(request: dict[str, Any]) -> dict[str, Any]:
     messages: list[dict[str, Any]] = []
 
     # System prompt: top-level field -> system role message
-    system = request.get("system", "")
+    # Strip Anthropic identity claims before prepending our preamble
+    system = strip_anthropic_identity(request.get("system", ""))
     preamble = _config.system_prompt_preamble
     if preamble and system:
         system = f"{preamble}\n\n{system}"

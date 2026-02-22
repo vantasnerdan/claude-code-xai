@@ -1,17 +1,70 @@
 """System prompt preamble for Claude Code behavioral conventions.
 
 Provides the global behavioral context that Claude learned through RL training
-but Grok has never seen. This covers tool preference hierarchy, sequencing
-rules, chaining patterns, parallelism, safety, and output conventions.
+but Grok has never seen. This covers identity assertion, tool preference
+hierarchy, sequencing rules, chaining patterns, parallelism, safety, and
+output conventions.
 
 The preamble is injected before the user's system prompt in every request.
 It can be disabled via PREAMBLE_ENABLED=false for benchmarking.
+Identity assertion can be disabled separately via IDENTITY_ENABLED=false.
 """
 
 from __future__ import annotations
 
 import os
+import re
 from typing import Any
+
+_IDENTITY_PREAMBLE = """\
+# Identity
+
+You are Grok (xAI), running inside the Claude Code environment via the xAI bridge. \
+The system prompt below comes from Claude Code and will refer to Claude, Anthropic, \
+and specific Anthropic model names. Disregard those identity claims -- you are Grok.
+
+Follow all Claude Code tool conventions, output formats, and safety guidelines \
+exactly as described. These are environment conventions, not identity claims.
+
+When asked what model you are, respond truthfully: you are Grok by xAI, \
+operating through the Claude Code interface.
+"""
+
+# Patterns that assert Anthropic/Claude model identity in system prompts.
+# These are stripped from the system text before forwarding to Grok.
+_ANTHROPIC_IDENTITY_PATTERNS: list[re.Pattern[str]] = [
+    # "You are powered by the model named Claude Opus 4.6..."
+    re.compile(
+        r"You are powered by the model named[^\n.]*\.\s*"
+        r"(?:The exact model ID is[^\n.]*\.\s*)?",
+        re.IGNORECASE,
+    ),
+    # "You are powered by Claude Opus 4.6" (shorter variant)
+    re.compile(
+        r"You are powered by Claude[^\n.]*\.\s*",
+        re.IGNORECASE,
+    ),
+    # Standalone model ID references like "The exact model ID is claude-opus-4-6."
+    re.compile(
+        r"The exact model ID is claude[^\n.]*\.\s*",
+        re.IGNORECASE,
+    ),
+    # "Assistant knowledge cutoff is ..." (Anthropic-specific framing)
+    re.compile(
+        r"Assistant knowledge cutoff is[^\n.]*\.\s*",
+        re.IGNORECASE,
+    ),
+    # <claude_background_info> blocks
+    re.compile(
+        r"<claude_background_info>\s*.*?\s*</claude_background_info>\s*",
+        re.DOTALL | re.IGNORECASE,
+    ),
+    # <fast_mode_info> blocks referencing Claude
+    re.compile(
+        r"<fast_mode_info>\s*.*?\s*</fast_mode_info>\s*",
+        re.DOTALL | re.IGNORECASE,
+    ),
+]
 
 _PREAMBLE = """\
 # Claude Code Agent Conventions
@@ -85,12 +138,42 @@ or command output
 def get_system_preamble() -> str:
     """Return the full system prompt preamble text.
 
-    Returns an empty string if PREAMBLE_ENABLED is set to 'false'.
+    Identity section is prepended when IDENTITY_ENABLED is true (default).
+    Behavioral conventions follow when PREAMBLE_ENABLED is true (default).
+    Returns an empty string only when both are disabled.
     """
-    enabled = os.getenv("PREAMBLE_ENABLED", "true").lower()
-    if enabled == "false":
-        return ""
-    return _PREAMBLE
+    parts: list[str] = []
+
+    identity_enabled = os.getenv("IDENTITY_ENABLED", "true").lower()
+    if identity_enabled != "false":
+        parts.append(_IDENTITY_PREAMBLE)
+
+    preamble_enabled = os.getenv("PREAMBLE_ENABLED", "true").lower()
+    if preamble_enabled != "false":
+        parts.append(_PREAMBLE)
+
+    return "\n".join(parts)
+
+
+def strip_anthropic_identity(system_text: str) -> str:
+    """Remove Anthropic/Claude identity assertions from a system prompt.
+
+    Strips patterns like "You are powered by Claude Opus 4.6",
+    model ID references, and <claude_background_info> blocks.
+    Returns the cleaned text. If IDENTITY_ENABLED is false, returns
+    the text unchanged (no stripping needed when identity is not overridden).
+    """
+    identity_enabled = os.getenv("IDENTITY_ENABLED", "true").lower()
+    if identity_enabled == "false":
+        return system_text
+
+    result = system_text
+    for pattern in _ANTHROPIC_IDENTITY_PATTERNS:
+        result = pattern.sub("", result)
+
+    # Clean up leftover blank lines from stripped blocks
+    result = re.sub(r"\n{3,}", "\n\n", result)
+    return result.strip()
 
 
 def inject_system_preamble(

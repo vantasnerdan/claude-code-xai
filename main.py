@@ -70,7 +70,7 @@ async def messages(request: Request):
         bridge_warnings = strip_thinking(body)
         if bridge_warnings:
             for w in bridge_warnings:
-                logger.info("Degraded feature: %s", w)
+                logger.debug("Degraded feature: %s", w)
 
         openai_body = anthropic_to_openai(body)
 

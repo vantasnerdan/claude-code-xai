@@ -1,4 +1,4 @@
-# claude-code-xia
+# claude-code-xai
 
 ## xai-grok-claude-code-bridge
 

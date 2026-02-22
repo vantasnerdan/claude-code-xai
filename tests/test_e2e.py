@@ -76,19 +76,34 @@ class TestBridgeStartup:
 class TestErrorHandling:
     """Verify error responses follow Anthropic format."""
 
-    def test_unsupported_thinking_feature(self, client: TestClient) -> None:
-        resp = client.post("/v1/messages", json={
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 1024,
-            "thinking": True,
-            "messages": [{"role": "user", "content": "Hello"}],
+    def test_thinking_feature_stripped_not_rejected(self, client: TestClient) -> None:
+        """Thinking param is gracefully stripped, not rejected with 400."""
+        mock_post, _ = _mock_xai_response({
+            "id": "chatcmpl-think1",
+            "object": "chat.completion",
+            "choices": [{
+                "index": 0,
+                "message": {"role": "assistant", "content": "Hello!"},
+                "finish_reason": "stop",
+            }],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
         })
-        assert resp.status_code == 400
+
+        import main
+        with patch.object(main.client, "post", side_effect=mock_post):
+            resp = client.post("/v1/messages", json={
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 1024,
+                "thinking": {"type": "enabled", "budget_tokens": 10000},
+                "messages": [{"role": "user", "content": "Hello"}],
+            })
+
+        assert resp.status_code == 200
         data = resp.json()
-        assert data["type"] == "error"
-        assert data["error"]["type"] == "invalid_request_error"
-        assert "thinking" in data["error"]["message"]
-        assert "suggestion" in data["error"]
+        assert data["type"] == "message"
+        assert data["content"][0]["text"] == "Hello!"
+        assert "X-Bridge-Warning" in resp.headers
+        assert "thinking" in resp.headers["X-Bridge-Warning"].lower()
 
     def test_unsupported_image_content(self, client: TestClient) -> None:
         resp = client.post("/v1/messages", json={

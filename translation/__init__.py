@@ -5,7 +5,7 @@ Converts Claude Code (Anthropic Messages API) traffic into xAI/Grok
 enrichment injection hooks at every boundary.
 """
 
-from translation.forward import anthropic_to_openai, translate_messages, translate_tools
+from translation.forward import anthropic_to_openai, translate_messages, translate_tools, strip_thinking
 from translation.reverse import openai_to_anthropic, translate_response
 from translation.streaming import translate_sse_event, OpenAIToAnthropicStreamAdapter
 from translation.config import TranslationConfig
@@ -14,6 +14,7 @@ __all__ = [
     "anthropic_to_openai",
     "translate_messages",
     "translate_tools",
+    "strip_thinking",
     "openai_to_anthropic",
     "translate_response",
     "translate_sse_event",

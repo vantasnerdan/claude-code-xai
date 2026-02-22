@@ -14,7 +14,7 @@ import time
 import logging
 from dotenv import load_dotenv
 
-from translation.forward import anthropic_to_openai
+from translation.forward import anthropic_to_openai, strip_thinking
 from translation.reverse import translate_response
 from translation.streaming import OpenAIToAnthropicStreamAdapter
 from translation.tools import set_tool_enrichment_hook
@@ -55,19 +55,29 @@ async def messages(request: Request):
     body = await request.json()
     start = time.time()
     try:
+        bridge_warnings = strip_thinking(body)
+        if bridge_warnings:
+            for w in bridge_warnings:
+                logger.info("Degraded feature: %s", w)
+
         openai_body = anthropic_to_openai(body)
         headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
 
         if openai_body.get("stream"):
-            return await _stream(openai_body, headers)
+            return await _stream(openai_body, headers, bridge_warnings)
 
         resp = await client.post("/chat/completions", json=openai_body, headers=headers)
         data = resp.json()
         logger.info("xAI response in %.2fs (status=%d)", time.time() - start, resp.status_code)
         result = translate_response(data, status_code=resp.status_code)
+
         if resp.status_code != 200:
             return JSONResponse(status_code=resp.status_code, content=result)
-        return result
+
+        response_headers = {}
+        if bridge_warnings:
+            response_headers["X-Bridge-Warning"] = "; ".join(bridge_warnings)
+        return JSONResponse(content=result, headers=response_headers)
 
     except NotImplementedError as e:
         return JSONResponse(status_code=400, content={
@@ -81,7 +91,9 @@ async def messages(request: Request):
             "_links": {"retry": {"href": "/v1/messages", "method": "POST"}, "manifest": {"href": "/manifest"}}})
 
 
-async def _stream(openai_body: dict, headers: dict[str, str]) -> StreamingResponse:
+async def _stream(
+    openai_body: dict, headers: dict[str, str], bridge_warnings: list[str] | None = None,
+) -> StreamingResponse:
     async def gen():
         async with client.stream("POST", "/chat/completions", json=openai_body, headers=headers) as resp:
             async def lines():
@@ -91,7 +103,11 @@ async def _stream(openai_body: dict, headers: dict[str, str]) -> StreamingRespon
             adapter = OpenAIToAnthropicStreamAdapter(lines())
             async for event in adapter:
                 yield f"event: {event.get('type', 'unknown')}\ndata: {json.dumps(event)}\n\n"
-    return StreamingResponse(gen(), media_type="text/event-stream")
+
+    response_headers = {}
+    if bridge_warnings:
+        response_headers["X-Bridge-Warning"] = "; ".join(bridge_warnings)
+    return StreamingResponse(gen(), media_type="text/event-stream", headers=response_headers)
 
 
 if __name__ == "__main__":

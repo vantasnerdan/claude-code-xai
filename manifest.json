@@ -1,0 +1,14 @@
+{
+  "name": "xAI Agentic Claude Bridge",
+  "version": "1.0",
+  "description": "Full Claude Code + Grok powered by Agentic API Standard (Gold)",
+  "capabilities": ["chat/completions", "tools", "webmcp"],
+  "default_model": "grok-4-1-fast-reasoning",
+  "tools": [],
+  "_links": {
+    "self": {"href": "/manifest"},
+    "chat": {"href": "/v1/messages", "method": "POST"},
+    "health": {"href": "/health"},
+    "metrics": {"href": "/metrics"}
+  }
+}

@@ -9,13 +9,60 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from translation.config import TranslationConfig, UNSUPPORTED_FEATURES
+import logging
+
+from translation.config import TranslationConfig, UNSUPPORTED_FEATURES, STRIPPED_FEATURES
 from translation.tools import translate_tools as _translate_tools
 
 # Re-export so tests can import from translation.forward
 translate_tools = _translate_tools
 
 _config = TranslationConfig()
+logger = logging.getLogger(__name__)
+
+# Content block types that belong to Anthropic's thinking feature.
+# These are stripped from messages when forwarding to xAI.
+_THINKING_BLOCK_TYPES: frozenset[str] = frozenset({
+    "thinking",
+    "redacted_thinking",
+})
+
+
+def strip_thinking(request: dict[str, Any]) -> list[str]:
+    """Strip thinking-related fields from an Anthropic request.
+
+    Removes the top-level 'thinking' parameter and any thinking/redacted_thinking
+    content blocks from messages. Grok models reason internally and do not need
+    (or support) explicit thinking parameters.
+
+    Returns a list of warning strings for stripped features.
+    """
+    warnings: list[str] = []
+
+    for feature in STRIPPED_FEATURES:
+        if feature in request and request[feature]:
+            warnings.append(
+                f"'{feature}' parameter stripped. "
+                f"Grok models reason internally; response quality is not affected."
+            )
+            del request[feature]
+
+    # Strip thinking content blocks from conversation history
+    for msg in request.get("messages", []):
+        content = msg.get("content")
+        if isinstance(content, list):
+            filtered = [
+                block for block in content
+                if block.get("type") not in _THINKING_BLOCK_TYPES
+            ]
+            if len(filtered) < len(content):
+                msg["content"] = filtered
+                if not any("thinking" in w for w in warnings):
+                    warnings.append(
+                        "Thinking content blocks stripped from conversation history."
+                    )
+
+    return warnings
 
 
 def anthropic_to_openai(request: dict[str, Any]) -> dict[str, Any]:

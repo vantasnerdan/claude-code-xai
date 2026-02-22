@@ -38,7 +38,10 @@ DEGRADED_FEATURES: frozenset[str] = frozenset({
 })
 
 # Features that fail loudly (raise NotImplementedError)
-UNSUPPORTED_FEATURES: frozenset[str] = frozenset({
+UNSUPPORTED_FEATURES: frozenset[str] = frozenset()
+
+# Features stripped from requests (Grok handles reasoning internally)
+STRIPPED_FEATURES: frozenset[str] = frozenset({
     "thinking",
 })
 

@@ -50,8 +50,8 @@ async def health() -> dict:
     }
 
 
-@app.post("/v1/messages")
-async def messages(request: Request) -> dict | JSONResponse | StreamingResponse:
+@app.post("/v1/messages", response_model=None)
+async def messages(request: Request):
     body = await request.json()
     start = time.time()
     try:

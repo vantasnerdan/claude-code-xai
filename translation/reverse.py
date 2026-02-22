@@ -7,6 +7,7 @@ tool_use blocks, stop_reason mapping, usage translation, error formatting.
 from __future__ import annotations
 
 import json
+import re
 import uuid
 from typing import Any
 
@@ -15,6 +16,32 @@ from translation.config import TranslationConfig, STOP_REASON_MAP
 
 _config = TranslationConfig()
 logger = get_logger("reverse")
+
+# Pattern to match literal escape sequences that should be real control chars.
+# Matches \n, \t, \r that are NOT preceded by an actual backslash (negative
+# lookbehind ensures we don't corrupt already-escaped sequences like \\n).
+_ESCAPE_MAP: dict[str, str] = {
+    r"\n": "\n",
+    r"\t": "\t",
+    r"\r": "\r",
+}
+_LITERAL_ESCAPE_RE = re.compile(r"(?<!\\)\\([ntr])")
+
+
+def unescape_text(text: str) -> str:
+    """Unescape literal backslash-n/t/r sequences in model output text.
+
+    xAI/Grok may return text with literal two-character escape sequences
+    (backslash + n) instead of actual newline characters. This converts
+    them to real control characters so Claude Code renders them correctly.
+
+    Only applied to display text, never to tool call arguments.
+    """
+    if "\\" not in text:
+        return text
+    return _LITERAL_ESCAPE_RE.sub(
+        lambda m: _ESCAPE_MAP[m.group(0)], text
+    )
 
 _ERROR_TYPE_MAP: dict[str, str] = {
     "rate_limit_error": "rate_limit_error",
@@ -75,7 +102,7 @@ def _build_content(message: dict[str, Any]) -> list[dict[str, Any]]:
     tool_calls = message.get("tool_calls")
 
     if text is not None:
-        content.append({"type": "text", "text": text})
+        content.append({"type": "text", "text": unescape_text(text)})
     elif not tool_calls:
         content.append({"type": "text", "text": ""})
 

@@ -35,15 +35,19 @@ class TestSystemMessageExtraction:
     """Top-level system field handling."""
 
     def test_system_field_becomes_system_role_message(self) -> None:
-        """Top-level system field becomes a system role message at position 0."""
+        """Top-level system field becomes a system role message at position 0.
+
+        When preamble is enabled (default), the system content includes
+        the preamble prepended to the original system text.
+        """
         request = system_message_request()
         result = anthropic_to_openai(request)
 
         assert result["messages"][0]["role"] == "system"
-        assert result["messages"][0]["content"] == request["system"]
+        assert request["system"] in result["messages"][0]["content"]
 
-    def test_system_field_absent_produces_no_system_message(self) -> None:
-        """When no system field is present, no system message is injected."""
+    def test_system_field_absent_injects_preamble(self) -> None:
+        """When no system field is present but preamble is enabled, a system message is injected."""
         request = {
             "model": "claude-sonnet-4-20250514",
             "max_tokens": 1024,
@@ -51,11 +55,12 @@ class TestSystemMessageExtraction:
         }
         result = anthropic_to_openai(request)
 
-        roles = [m["role"] for m in result["messages"]]
-        assert "system" not in roles
+        # Preamble is enabled by default, so a system message is always present
+        assert result["messages"][0]["role"] == "system"
+        assert "Tool Preference Hierarchy" in result["messages"][0]["content"]
 
-    def test_empty_system_field_is_omitted(self) -> None:
-        """An empty string system field should not produce a system message."""
+    def test_empty_system_field_uses_preamble(self) -> None:
+        """An empty system field still produces a system message from preamble."""
         request = {
             "model": "claude-sonnet-4-20250514",
             "max_tokens": 1024,
@@ -64,8 +69,8 @@ class TestSystemMessageExtraction:
         }
         result = anthropic_to_openai(request)
 
-        roles = [m["role"] for m in result["messages"]]
-        assert "system" not in roles
+        assert result["messages"][0]["role"] == "system"
+        assert "Tool Preference Hierarchy" in result["messages"][0]["content"]
 
     def test_system_message_preserves_preceding_user_message_order(self) -> None:
         """System message is first; original user messages follow in order."""

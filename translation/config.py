@@ -9,6 +9,8 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
+from enrichment.system_preamble import get_system_preamble
+
 
 # Anthropic model name -> xAI/Grok model name
 MODEL_MAP: dict[str, str] = {
@@ -48,7 +50,9 @@ class TranslationConfig:
     default_model: str = "grok-4-1-fast-reasoning"
     default_temperature: float = 0.7
     default_max_tokens: int = 8192
-    system_prompt_preamble: str = ""
+    system_prompt_preamble: str = field(
+        default_factory=get_system_preamble
+    )
     xai_api_key: str = field(
         default_factory=lambda: os.getenv("XAI_API_KEY", "")
     )

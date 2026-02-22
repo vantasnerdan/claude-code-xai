@@ -65,6 +65,29 @@ def strip_thinking(request: dict[str, Any]) -> list[str]:
     return warnings
 
 
+def _flatten_system(system: str | list[dict[str, Any]]) -> str:
+    """Flatten a system prompt to a single string.
+
+    Handles both Anthropic system prompt formats:
+    - String: returned as-is
+    - List of content blocks: text blocks are joined with newlines,
+      non-text blocks are skipped
+    """
+    if isinstance(system, str):
+        return system
+    if isinstance(system, list):
+        parts: list[str] = []
+        for block in system:
+            if isinstance(block, dict) and block.get("type") == "text":
+                text = block.get("text", "")
+                if text:
+                    parts.append(text)
+        return "\n\n".join(parts)
+    raise TypeError(
+        f"Expected str or list for system field, got {type(system).__name__}"
+    )
+
+
 def anthropic_to_openai(request: dict[str, Any]) -> dict[str, Any]:
     """Translate a full Anthropic Messages API request to OpenAI format."""
     for feature in UNSUPPORTED_FEATURES:
@@ -77,8 +100,12 @@ def anthropic_to_openai(request: dict[str, Any]) -> dict[str, Any]:
     messages: list[dict[str, Any]] = []
 
     # System prompt: top-level field -> system role message
-    # Strip Anthropic identity claims before prepending our preamble
-    system = strip_anthropic_identity(request.get("system", ""))
+    # The Anthropic API sends system as either a string or a list of
+    # content blocks (e.g. [{"type": "text", "text": "..."}]).
+    # Strip Anthropic identity claims, then flatten to a string for OpenAI.
+    raw_system = request.get("system", "")
+    stripped = strip_anthropic_identity(raw_system)
+    system = _flatten_system(stripped)
     preamble = _config.system_prompt_preamble
     if preamble and system:
         system = f"{preamble}\n\n{system}"

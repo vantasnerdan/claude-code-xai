@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from translation.forward import anthropic_to_openai, translate_messages, translate_tools
+from translation.forward import anthropic_to_openai, translate_messages, translate_tools, _flatten_system
 
 from tests.translation.fixtures.anthropic_messages import (
     simple_text_message,
@@ -357,3 +357,180 @@ class TestParallelToolCalls:
         assert "compare" in assistant_msg["content"].lower()
         # Tool calls should also be present
         assert len(assistant_msg["tool_calls"]) == 2
+
+
+class TestFlattenSystem:
+    """Tests for _flatten_system() helper."""
+
+    def test_string_passthrough(self) -> None:
+        """String system prompt passes through unchanged."""
+        assert _flatten_system("Hello world.") == "Hello world."
+
+    def test_empty_string(self) -> None:
+        """Empty string returns empty string."""
+        assert _flatten_system("") == ""
+
+    def test_single_text_block(self) -> None:
+        """Single text content block flattens to its text."""
+        system = [{"type": "text", "text": "You are a coding assistant."}]
+        assert _flatten_system(system) == "You are a coding assistant."
+
+    def test_multiple_text_blocks_joined(self) -> None:
+        """Multiple text blocks are joined with double newlines."""
+        system = [
+            {"type": "text", "text": "First block."},
+            {"type": "text", "text": "Second block."},
+        ]
+        assert _flatten_system(system) == "First block.\n\nSecond block."
+
+    def test_empty_text_blocks_skipped(self) -> None:
+        """Empty text blocks are skipped."""
+        system = [
+            {"type": "text", "text": ""},
+            {"type": "text", "text": "Content here."},
+        ]
+        assert _flatten_system(system) == "Content here."
+
+    def test_empty_list_returns_empty_string(self) -> None:
+        """Empty list returns empty string."""
+        assert _flatten_system([]) == ""
+
+    def test_non_text_blocks_skipped(self) -> None:
+        """Non-text blocks are skipped during flattening."""
+        system = [
+            {"type": "text", "text": "Instructions."},
+            {"type": "image", "source": {"data": "..."}},
+        ]
+        assert _flatten_system(system) == "Instructions."
+
+    def test_invalid_type_raises(self) -> None:
+        """Non-string non-list input raises TypeError."""
+        with pytest.raises(TypeError, match="Expected str or list"):
+            _flatten_system(123)  # type: ignore[arg-type]
+
+
+class TestListTypeSystemInForwardTranslation:
+    """Tests for anthropic_to_openai() handling list-type system field.
+
+    Claude Code sends system as a list of content blocks for
+    streaming/opus requests. This crashed in PR #19 because
+    strip_anthropic_identity() tried to run regex on a list.
+    """
+
+    def test_list_system_produces_system_message(self) -> None:
+        """List-type system field is flattened and becomes system role message."""
+        request = {
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "You are a coding assistant."},
+            ],
+            "messages": [{"role": "user", "content": "Hello"}],
+        }
+        result = anthropic_to_openai(request)
+        system_msg = result["messages"][0]
+        assert system_msg["role"] == "system"
+        assert "You are a coding assistant." in system_msg["content"]
+
+    def test_list_system_strips_identity(self) -> None:
+        """Identity patterns are stripped from list-type system blocks."""
+        request = {
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 1024,
+            "system": [
+                {
+                    "type": "text",
+                    "text": (
+                        "You are powered by the model named Claude Opus 4.6. "
+                        "The exact model ID is claude-opus-4-6."
+                    ),
+                },
+                {"type": "text", "text": "You are a coding assistant."},
+            ],
+            "messages": [{"role": "user", "content": "Hello"}],
+        }
+        result = anthropic_to_openai(request)
+        system_msg = result["messages"][0]
+        assert "powered by the model named" not in system_msg["content"]
+        assert "claude-opus-4-6" not in system_msg["content"]
+        assert "You are a coding assistant." in system_msg["content"]
+
+    def test_list_system_includes_preamble(self) -> None:
+        """Preamble is prepended to flattened list-type system content."""
+        request = {
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "You are a coding assistant."},
+            ],
+            "messages": [{"role": "user", "content": "Hello"}],
+        }
+        result = anthropic_to_openai(request)
+        system_msg = result["messages"][0]
+        assert "You are Grok" in system_msg["content"]
+        assert "Tool Preference Hierarchy" in system_msg["content"]
+        assert "You are a coding assistant." in system_msg["content"]
+
+    def test_list_system_realistic_claude_code_request(self) -> None:
+        """Realistic Claude Code streaming request with list-type system."""
+        request = {
+            "model": "claude-opus-4-20250514",
+            "max_tokens": 16384,
+            "stream": True,
+            "system": [
+                {
+                    "type": "text",
+                    "text": (
+                        "You are powered by the model named Claude Opus 4.6. "
+                        "The exact model ID is claude-opus-4-6.\n\n"
+                        "Assistant knowledge cutoff is May 2025.\n\n"
+                        "<claude_background_info>\n"
+                        "The most recent frontier Claude model is Claude Opus 4.6 "
+                        "(model ID: 'claude-opus-4-6').\n"
+                        "</claude_background_info>\n\n"
+                        "<fast_mode_info>\n"
+                        "Fast mode for Claude Code uses the same Claude Opus 4.6 "
+                        "model with faster output.\n"
+                        "</fast_mode_info>"
+                    ),
+                },
+                {
+                    "type": "text",
+                    "text": "You are an expert coding assistant.",
+                    "cache_control": {"type": "ephemeral"},
+                },
+            ],
+            "messages": [
+                {"role": "user", "content": "Fix the bug in main.py"},
+            ],
+        }
+        result = anthropic_to_openai(request)
+        system_msg = result["messages"][0]
+        assert system_msg["role"] == "system"
+        # Identity claims stripped
+        assert "powered by" not in system_msg["content"]
+        assert "claude-opus" not in system_msg["content"]
+        assert "knowledge cutoff" not in system_msg["content"]
+        assert "claude_background_info" not in system_msg["content"]
+        # Preamble injected
+        assert "You are Grok" in system_msg["content"]
+        # Non-identity content preserved
+        assert "expert coding assistant" in system_msg["content"]
+        # Stream flag preserved
+        assert result["stream"] is True
+
+    def test_list_system_all_identity_blocks_produces_preamble_only(self) -> None:
+        """When all system blocks are identity-only, result is preamble only."""
+        request = {
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 1024,
+            "system": [
+                {"type": "text", "text": "You are powered by Claude Opus 4.6."},
+            ],
+            "messages": [{"role": "user", "content": "Hello"}],
+        }
+        result = anthropic_to_openai(request)
+        system_msg = result["messages"][0]
+        assert system_msg["role"] == "system"
+        assert "You are Grok" in system_msg["content"]
+        assert "powered by Claude" not in system_msg["content"]

@@ -34,22 +34,26 @@ operating through the Claude Code interface.
 # These are stripped from the system text before forwarding to Grok.
 _ANTHROPIC_IDENTITY_PATTERNS: list[re.Pattern[str]] = [
     # "You are powered by the model named Claude Opus 4.6..."
+    # Uses [^\n]*? (lazy, allows dots) + sentence-end anchor to handle
+    # version numbers like "4.6" without stopping at the internal period.
     re.compile(
-        r"You are powered by the model named[^\n.]*\.\s*"
-        r"(?:The exact model ID is[^\n.]*\.\s*)?",
-        re.IGNORECASE,
+        r"You are powered by the model named[^\n]*?(?:\.\s+|\.\s*$)"
+        r"(?:The exact model ID is[^\n]*?(?:\.\s+|\.\s*$))?",
+        re.IGNORECASE | re.MULTILINE,
     ),
     # "You are powered by Claude Opus 4.6" (shorter variant)
     re.compile(
-        r"You are powered by Claude[^\n.]*\.\s*",
-        re.IGNORECASE,
+        r"You are powered by Claude[^\n]*?(?:\.\s+|\.\s*$)",
+        re.IGNORECASE | re.MULTILINE,
     ),
     # Standalone model ID references like "The exact model ID is claude-opus-4-6."
+    # Model IDs use hyphens not dots, so [^\n.] is safe here.
     re.compile(
         r"The exact model ID is claude[^\n.]*\.\s*",
         re.IGNORECASE,
     ),
     # "Assistant knowledge cutoff is ..." (Anthropic-specific framing)
+    # Month names don't contain dots, so [^\n.] is safe here.
     re.compile(
         r"Assistant knowledge cutoff is[^\n.]*\.\s*",
         re.IGNORECASE,
@@ -155,25 +159,56 @@ def get_system_preamble() -> str:
     return "\n".join(parts)
 
 
-def strip_anthropic_identity(system_text: str) -> str:
+def _strip_text(text: str) -> str:
+    """Apply identity-stripping regexes to a single string.
+
+    Returns the cleaned text with collapsed blank lines and stripped whitespace.
+    """
+    result = text
+    for pattern in _ANTHROPIC_IDENTITY_PATTERNS:
+        result = pattern.sub("", result)
+    result = re.sub(r"\n{3,}", "\n\n", result)
+    return result.strip()
+
+
+def strip_anthropic_identity(
+    system: str | list[dict[str, Any]],
+) -> str | list[dict[str, Any]]:
     """Remove Anthropic/Claude identity assertions from a system prompt.
 
+    Handles both system prompt formats sent by the Anthropic Messages API:
+    - String: applies regex patterns directly
+    - List of content blocks: iterates blocks, strips text in each
+      ``{"type": "text"}`` block, removes blocks that become empty
+
     Strips patterns like "You are powered by Claude Opus 4.6",
-    model ID references, and <claude_background_info> blocks.
-    Returns the cleaned text. If IDENTITY_ENABLED is false, returns
-    the text unchanged (no stripping needed when identity is not overridden).
+    model ID references, and ``<claude_background_info>`` blocks.
+    If IDENTITY_ENABLED is false, returns the input unchanged.
     """
     identity_enabled = os.getenv("IDENTITY_ENABLED", "true").lower()
     if identity_enabled == "false":
-        return system_text
+        return system
 
-    result = system_text
-    for pattern in _ANTHROPIC_IDENTITY_PATTERNS:
-        result = pattern.sub("", result)
+    if isinstance(system, str):
+        return _strip_text(system)
 
-    # Clean up leftover blank lines from stripped blocks
-    result = re.sub(r"\n{3,}", "\n\n", result)
-    return result.strip()
+    if isinstance(system, list):
+        result_blocks: list[dict[str, Any]] = []
+        for block in system:
+            if not isinstance(block, dict):
+                result_blocks.append(block)
+                continue
+            if block.get("type") != "text":
+                result_blocks.append(block)
+                continue
+            cleaned = _strip_text(block.get("text", ""))
+            if cleaned:
+                result_blocks.append({**block, "text": cleaned})
+        return result_blocks
+
+    raise TypeError(
+        f"Expected str or list for system field, got {type(system).__name__}"
+    )
 
 
 def inject_system_preamble(

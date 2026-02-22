@@ -9,8 +9,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-import logging
-
+from bridge.logging_config import get_logger
 from translation.config import TranslationConfig, UNSUPPORTED_FEATURES, STRIPPED_FEATURES
 from translation.tools import translate_tools as _translate_tools
 from enrichment.system_preamble import strip_anthropic_identity
@@ -19,7 +18,7 @@ from enrichment.system_preamble import strip_anthropic_identity
 translate_tools = _translate_tools
 
 _config = TranslationConfig()
-logger = logging.getLogger(__name__)
+logger = get_logger("forward")
 
 # Content block types that belong to Anthropic's thinking feature.
 # These are stripped from messages when forwarding to xAI.

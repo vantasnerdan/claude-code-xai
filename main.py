@@ -11,9 +11,9 @@ import httpx
 import os
 import json
 import time
-import logging
 from dotenv import load_dotenv
 
+from bridge.logging_config import configure_logging, get_logger, dump_json, sanitize_request
 from translation.forward import anthropic_to_openai, strip_thinking
 from translation.reverse import translate_response
 from translation.streaming import OpenAIToAnthropicStreamAdapter
@@ -21,7 +21,8 @@ from translation.tools import set_tool_enrichment_hook
 from enrichment.factory import create_enricher
 
 load_dotenv()
-logger = logging.getLogger(__name__)
+configure_logging()
+logger = get_logger("main")
 
 app = FastAPI(title="xai-agentic-claude-bridge")
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")
@@ -54,6 +55,17 @@ async def health() -> dict:
 async def messages(request: Request):
     body = await request.json()
     start = time.time()
+
+    # -- Point 2: Outgoing request summary (INFO) --
+    msg_count = len(body.get("messages", []))
+    tool_count = len(body.get("tools", []) or [])
+    has_thinking = "thinking" in body
+    is_stream = bool(body.get("stream"))
+    logger.info(
+        "POST /v1/messages model=%s messages=%d tools=%d thinking=%s stream=%s",
+        body.get("model", "?"), msg_count, tool_count, has_thinking, is_stream,
+    )
+
     try:
         bridge_warnings = strip_thinking(body)
         if bridge_warnings:
@@ -61,14 +73,43 @@ async def messages(request: Request):
                 logger.info("Degraded feature: %s", w)
 
         openai_body = anthropic_to_openai(body)
+
+        # -- Point 2: Full translated payload at DEBUG --
+        logger.debug(
+            "Translated request: %s",
+            json.dumps(sanitize_request(openai_body), default=str),
+        )
+        dump_json("request", sanitize_request(openai_body))
+
         headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
 
         if openai_body.get("stream"):
-            return await _stream(openai_body, headers, bridge_warnings)
+            return await _stream(openai_body, headers, bridge_warnings, start)
 
         resp = await client.post("/chat/completions", json=openai_body, headers=headers)
         data = resp.json()
-        logger.info("xAI response in %.2fs (status=%d)", time.time() - start, resp.status_code)
+        elapsed = time.time() - start
+
+        # -- Point 3: Response summary (INFO) --
+        usage = data.get("usage", {})
+        choices = data.get("choices", [])
+        stop_reason = choices[0].get("finish_reason", "?") if choices else "?"
+        tool_calls_count = len(
+            (choices[0].get("message", {}).get("tool_calls") or []) if choices else []
+        )
+        logger.info(
+            "xAI response in %.2fs status=%d stop=%s tool_calls=%d "
+            "tokens=%d/%d/%d",
+            elapsed, resp.status_code, stop_reason, tool_calls_count,
+            usage.get("prompt_tokens", 0),
+            usage.get("completion_tokens", 0),
+            usage.get("total_tokens", 0),
+        )
+
+        # -- Point 3: Full response at DEBUG --
+        logger.debug("xAI response body: %s", json.dumps(data, default=str))
+        dump_json("response", data)
+
         result = translate_response(data, status_code=resp.status_code)
 
         if resp.status_code != 200:
@@ -80,6 +121,7 @@ async def messages(request: Request):
         return JSONResponse(content=result, headers=response_headers)
 
     except NotImplementedError as e:
+        logger.warning("Unsupported feature: %s", e)
         return JSONResponse(status_code=400, content={
             "type": "error", "error": {"type": "invalid_request_error", "message": str(e),
                                         "suggestion": "Use native Anthropic API for this feature."}})
@@ -92,17 +134,26 @@ async def messages(request: Request):
 
 
 async def _stream(
-    openai_body: dict, headers: dict[str, str], bridge_warnings: list[str] | None = None,
+    openai_body: dict, headers: dict[str, str],
+    bridge_warnings: list[str] | None = None, start_time: float = 0,
 ) -> StreamingResponse:
+    event_count = 0
+
     async def gen():
+        nonlocal event_count
         async with client.stream("POST", "/chat/completions", json=openai_body, headers=headers) as resp:
+            logger.info("Streaming started status=%d", resp.status_code)
+
             async def lines():
                 async for line in resp.aiter_lines():
                     if line:
                         yield line
             adapter = OpenAIToAnthropicStreamAdapter(lines())
             async for event in adapter:
+                event_count += 1
                 yield f"event: {event.get('type', 'unknown')}\ndata: {json.dumps(event)}\n\n"
+            elapsed = time.time() - start_time if start_time else 0
+            logger.info("Streaming complete events=%d elapsed=%.2fs", event_count, elapsed)
 
     response_headers = {}
     if bridge_warnings:

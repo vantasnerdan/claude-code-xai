@@ -278,19 +278,38 @@ class TestEnrichmentModeToggle:
         assert "behavioral_why" in result[0]
         assert "behavioral_when" in result[0]
 
-    def test_preamble_disabled(self) -> None:
-        with patch.dict(os.environ, {"PREAMBLE_ENABLED": "false"}):
+    def test_preamble_disabled_identity_disabled(self) -> None:
+        """Both disabled returns empty."""
+        with patch.dict(os.environ, {
+            "PREAMBLE_ENABLED": "false",
+            "IDENTITY_ENABLED": "false",
+        }):
             import importlib
             import enrichment.system_preamble
             importlib.reload(enrichment.system_preamble)
             from enrichment.system_preamble import get_system_preamble
             assert get_system_preamble() == ""
 
-    def test_preamble_enabled(self) -> None:
-        with patch.dict(os.environ, {"PREAMBLE_ENABLED": "true"}):
+    def test_preamble_disabled_identity_enabled(self) -> None:
+        """Behavioral disabled but identity still returned."""
+        with patch.dict(os.environ, {"PREAMBLE_ENABLED": "false"}, clear=False):
+            os.environ.pop("IDENTITY_ENABLED", None)
             import importlib
             import enrichment.system_preamble
             importlib.reload(enrichment.system_preamble)
             from enrichment.system_preamble import get_system_preamble
-            assert len(get_system_preamble()) > 0
-            assert "Tool Preference Hierarchy" in get_system_preamble()
+            result = get_system_preamble()
+            assert "You are Grok" in result
+            assert "Tool Preference Hierarchy" not in result
+
+    def test_preamble_enabled(self) -> None:
+        with patch.dict(os.environ, {"PREAMBLE_ENABLED": "true"}, clear=False):
+            os.environ.pop("IDENTITY_ENABLED", None)
+            import importlib
+            import enrichment.system_preamble
+            importlib.reload(enrichment.system_preamble)
+            from enrichment.system_preamble import get_system_preamble
+            result = get_system_preamble()
+            assert len(result) > 0
+            assert "Tool Preference Hierarchy" in result
+            assert "You are Grok" in result

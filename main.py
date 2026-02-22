@@ -18,7 +18,7 @@ from translation.forward import anthropic_to_openai
 from translation.reverse import translate_response
 from translation.streaming import OpenAIToAnthropicStreamAdapter
 from translation.tools import set_tool_enrichment_hook
-from agentic_enricher import enrich_tools_for_grok
+from enrichment.factory import create_enricher
 
 load_dotenv()
 logger = logging.getLogger(__name__)
@@ -29,7 +29,10 @@ if not XAI_API_KEY:
     logger.warning("XAI_API_KEY not set. Requests to xAI will fail.")
 
 client = httpx.AsyncClient(base_url="https://api.x.ai/v1", timeout=120.0)
-set_tool_enrichment_hook(enrich_tools_for_grok)
+
+enricher = create_enricher()
+set_tool_enrichment_hook(enricher.enrich)
+logger.info("Enrichment mode: %s", enricher.config.mode)
 
 
 @app.get("/manifest")
@@ -40,7 +43,11 @@ async def get_manifest() -> dict:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "healthy", "model": os.getenv("GROK_MODEL", "grok-4-1-fast-reasoning")}
+    return {
+        "status": "healthy",
+        "model": os.getenv("GROK_MODEL", "grok-4-1-fast-reasoning"),
+        "enrichment_mode": enricher.config.mode,
+    }
 
 
 @app.post("/v1/messages")

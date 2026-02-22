@@ -282,6 +282,151 @@ class TestStripAnthropicIdentity:
         assert "powered by claude" not in result
 
 
+class TestStripAnthropicIdentityListType:
+    """Tests for strip_anthropic_identity() with list-of-content-blocks system field.
+
+    The Anthropic Messages API sends the system field as either a string
+    or a list of typed content blocks. Claude Code uses the list format
+    for streaming/opus requests.
+    """
+
+    def test_list_type_returns_list(self) -> None:
+        """List input produces list output."""
+        system = [{"type": "text", "text": "Hello world."}]
+        result = strip_anthropic_identity(system)
+        assert isinstance(result, list)
+
+    def test_list_strips_identity_from_text_blocks(self) -> None:
+        """Identity patterns are stripped from text blocks in the list."""
+        system = [
+            {
+                "type": "text",
+                "text": (
+                    "You are a coding assistant. "
+                    "You are powered by Claude Opus 4.6. "
+                    "The exact model ID is claude-opus-4-6."
+                ),
+            }
+        ]
+        result = strip_anthropic_identity(system)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert "powered by Claude" not in result[0]["text"]
+        assert "claude-opus-4-6" not in result[0]["text"]
+        assert "You are a coding assistant." in result[0]["text"]
+
+    def test_list_removes_empty_text_blocks(self) -> None:
+        """Text blocks that become empty after stripping are removed."""
+        system = [
+            {"type": "text", "text": "You are powered by Claude Opus 4.6."},
+            {"type": "text", "text": "Keep this block."},
+        ]
+        result = strip_anthropic_identity(system)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["text"] == "Keep this block."
+
+    def test_list_preserves_non_text_blocks(self) -> None:
+        """Non-text blocks (e.g., cache_control) are preserved unchanged."""
+        system = [
+            {"type": "text", "text": "You are powered by Claude Opus 4.6."},
+            {"type": "text", "text": "Instructions here.", "cache_control": {"type": "ephemeral"}},
+        ]
+        result = strip_anthropic_identity(system)
+        assert isinstance(result, list)
+        assert len(result) == 1
+        assert result[0]["text"] == "Instructions here."
+        assert result[0]["cache_control"] == {"type": "ephemeral"}
+
+    def test_list_strips_background_info_block(self) -> None:
+        """<claude_background_info> is stripped from text blocks in list."""
+        system = [
+            {
+                "type": "text",
+                "text": (
+                    "Before.\n"
+                    "<claude_background_info>\n"
+                    "Claude model info here.\n"
+                    "</claude_background_info>\n"
+                    "After."
+                ),
+            }
+        ]
+        result = strip_anthropic_identity(system)
+        assert "claude_background_info" not in result[0]["text"]
+        assert "Before." in result[0]["text"]
+        assert "After." in result[0]["text"]
+
+    def test_list_multiple_text_blocks_stripped_independently(self) -> None:
+        """Each text block is stripped independently."""
+        system = [
+            {"type": "text", "text": "Assistant knowledge cutoff is May 2025."},
+            {"type": "text", "text": "You are powered by Claude Opus 4.6."},
+            {"type": "text", "text": "Follow the user's instructions."},
+        ]
+        result = strip_anthropic_identity(system)
+        assert len(result) == 1
+        assert result[0]["text"] == "Follow the user's instructions."
+
+    def test_list_empty_list_returns_empty_list(self) -> None:
+        """Empty list input returns empty list."""
+        result = strip_anthropic_identity([])
+        assert result == []
+
+    def test_list_all_blocks_stripped_returns_empty_list(self) -> None:
+        """If all text blocks become empty, an empty list is returned."""
+        system = [
+            {"type": "text", "text": "You are powered by Claude Opus 4.6."},
+        ]
+        result = strip_anthropic_identity(system)
+        assert result == []
+
+    def test_list_disabled_returns_unchanged(self) -> None:
+        """When IDENTITY_ENABLED=false, list is returned unchanged."""
+        system = [
+            {"type": "text", "text": "You are powered by Claude Opus 4.6."},
+        ]
+        with patch.dict(os.environ, {"IDENTITY_ENABLED": "false"}):
+            result = strip_anthropic_identity(system)
+        assert result == system
+
+    def test_list_realistic_claude_code_system(self) -> None:
+        """Realistic Claude Code streaming system with multiple blocks."""
+        system = [
+            {
+                "type": "text",
+                "text": (
+                    "You are powered by the model named Claude Opus 4.6. "
+                    "The exact model ID is claude-opus-4-6.\n\n"
+                    "Assistant knowledge cutoff is May 2025.\n\n"
+                    "<claude_background_info>\n"
+                    "The most recent frontier Claude model is Claude Opus 4.6.\n"
+                    "</claude_background_info>\n\n"
+                    "<fast_mode_info>\n"
+                    "Fast mode uses the same Claude Opus 4.6 model.\n"
+                    "</fast_mode_info>"
+                ),
+            },
+            {
+                "type": "text",
+                "text": "You are an expert coding assistant. Follow all tool conventions.",
+                "cache_control": {"type": "ephemeral"},
+            },
+        ]
+        result = strip_anthropic_identity(system)
+        assert isinstance(result, list)
+        # First block should be stripped entirely (all identity patterns)
+        # Second block is preserved with cache_control
+        assert len(result) == 1
+        assert "expert coding assistant" in result[0]["text"]
+        assert result[0]["cache_control"] == {"type": "ephemeral"}
+
+    def test_invalid_type_raises_typeerror(self) -> None:
+        """Non-string, non-list input raises TypeError."""
+        with pytest.raises(TypeError, match="Expected str or list"):
+            strip_anthropic_identity(42)  # type: ignore[arg-type]
+
+
 class TestInjectSystemPreamble:
     """Tests for inject_system_preamble()."""
 

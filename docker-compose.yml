@@ -1,0 +1,8 @@
+version: '3.9'
+services:
+  bridge:
+    build: .
+    ports:
+      - "4000:4000"
+    env_file: .env
+    restart: unless-stopped

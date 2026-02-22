@@ -1,88 +1,92 @@
-from fastapi import FastAPI, Request, HTTPException
+"""Claude Code xAI Bridge -- Anthropic Messages API to xAI Grok proxy.
+
+Receives Claude Code traffic on /v1/messages, translates to OpenAI format,
+forwards to xAI, translates response back. Enrichment hooks inject Agentic
+API Standard context.
+"""
+
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 import httpx
 import os
 import json
 import time
+import logging
 from dotenv import load_dotenv
-from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
-from models import AgenticError
+
+from translation.forward import anthropic_to_openai
+from translation.reverse import translate_response
+from translation.streaming import OpenAIToAnthropicStreamAdapter
+from translation.tools import set_tool_enrichment_hook
 from agentic_enricher import enrich_tools_for_grok
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="xai-agentic-claude-bridge")
+XAI_API_KEY = os.getenv("XAI_API_KEY", "")
+if not XAI_API_KEY:
+    logger.warning("XAI_API_KEY not set. Requests to xAI will fail.")
+
 client = httpx.AsyncClient(base_url="https://api.x.ai/v1", timeout=120.0)
+set_tool_enrichment_hook(enrich_tools_for_grok)
 
-GROK_MODEL = os.getenv("GROK_MODEL", "grok-4-1-fast-reasoning")
-
-# Metrics (prove your standard improves Grok)
-tool_success = Counter('tool_calls_success_total', 'Successful tool calls', ['tool_name'])
-tool_latency = Histogram('tool_call_latency_seconds', 'Latency', ['tool_name'])
 
 @app.get("/manifest")
-async def get_manifest():
+async def get_manifest() -> dict:
     with open("manifest.json") as f:
-        manifest = json.load(f)
-    return manifest  # full Gold tier
+        return json.load(f)
+
 
 @app.get("/health")
-@app.get("/metrics")
-async def metrics():
-    return JSONResponse(content={"status": "healthy", "model": GROK_MODEL}, media_type=CONTENT_TYPE_LATEST if "/metrics" in str else None)  # real prometheus in prod
+async def health() -> dict:
+    return {"status": "healthy", "model": os.getenv("GROK_MODEL", "grok-4-1-fast-reasoning")}
+
 
 @app.post("/v1/messages")
-async def messages(request: Request):
+async def messages(request: Request) -> dict | JSONResponse | StreamingResponse:
     body = await request.json()
     start = time.time()
-
-    # === YOUR AGENTIC STANDARD ENRICHMENT (the improvement layer) ===
-    if "tools" in body and body["tools"]:
-        body["tools"] = enrich_tools_for_grok(body["tools"])
-
     try:
-        # Anthropic → OpenAI format for xAI
-        openai_body = {
-            "model": GROK_MODEL,
-            "messages": body["messages"],
-            "tools": [{"type": "function", "function": t} for t in body.get("tools", [])] or None,
-            "temperature": body.get("temperature", 0.7),
-            "max_tokens": body.get("max_tokens", 8192),
-            "stream": body.get("stream", False)
-        }
-
-        resp = await client.post("/chat/completions", json=openai_body)
-
-        if resp.status_code != 200:
-            raise HTTPException(status_code=resp.status_code, detail=resp.text)
+        openai_body = anthropic_to_openai(body)
+        headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
 
         if openai_body.get("stream"):
-            async def stream():
+            return await _stream(openai_body, headers)
+
+        resp = await client.post("/chat/completions", json=openai_body, headers=headers)
+        data = resp.json()
+        logger.info("xAI response in %.2fs (status=%d)", time.time() - start, resp.status_code)
+        result = translate_response(data, status_code=resp.status_code)
+        if resp.status_code != 200:
+            return JSONResponse(status_code=resp.status_code, content=result)
+        return result
+
+    except NotImplementedError as e:
+        return JSONResponse(status_code=400, content={
+            "type": "error", "error": {"type": "invalid_request_error", "message": str(e),
+                                        "suggestion": "Use native Anthropic API for this feature."}})
+    except Exception as e:
+        logger.exception("Bridge error: %s", e)
+        return JSONResponse(status_code=500, content={
+            "type": "error", "error": {"type": "api_error", "message": str(e),
+                                        "suggestion": "Retry the request. Check XAI_API_KEY."},
+            "_links": {"retry": {"href": "/v1/messages", "method": "POST"}, "manifest": {"href": "/manifest"}}})
+
+
+async def _stream(openai_body: dict, headers: dict[str, str]) -> StreamingResponse:
+    async def gen():
+        async with client.stream("POST", "/chat/completions", json=openai_body, headers=headers) as resp:
+            async def lines():
                 async for line in resp.aiter_lines():
                     if line:
-                        yield f"{line}\n"
-            return StreamingResponse(stream(), media_type="text/event-stream")
+                        yield line
+            adapter = OpenAIToAnthropicStreamAdapter(lines())
+            async for event in adapter:
+                yield f"event: {event.get('type', 'unknown')}\ndata: {json.dumps(event)}\n\n"
+    return StreamingResponse(gen(), media_type="text/event-stream")
 
-        # Non-stream → add HATEOAS + standardized wrapper (Pattern 2 + 3)
-        data = resp.json()
-        return {
-            "content": data["choices"][0]["message"]["content"] or "",
-            "usage": data["usage"],
-            "_links": {"self": {"href": "/v1/messages"}, "retry": {"href": "/v1/messages", "method": "POST"}},
-            "warnings": []  # Pattern 8
-        }
-
-    except Exception as e:
-        err = AgenticError(
-            error="grok_bridge_error",
-            code=type(e).__name__,
-            message=str(e),
-            suggestion="Simplify tool parameters or retry with clearer schema. Check XAI_API_KEY.",
-            retry_after=5,
-            _links={"retry": {"href": "/v1/messages", "method": "POST"}, "manifest": {"href": "/manifest"}}
-        )
-        return JSONResponse(status_code=500, content=err.model_dump())
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", 4000)))
+    uvicorn.run(app, host=os.getenv("HOST", "0.0.0.0"), port=int(os.getenv("PORT", "4000")))

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json, uuid
 from typing import Any, AsyncIterator
 from translation.config import STOP_REASON_MAP
+from translation.reverse import unescape_text
 
 
 def _msg_start(chunk: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -44,7 +45,7 @@ def translate_sse_event(chunk: dict[str, Any], is_first: bool = False, is_last: 
         evts.append(_msg_start(chunk))
     text = delta.get("content")
     if text is not None and text != "":
-        evts.append({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": text}})
+        evts.append({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": unescape_text(text)}})
     for tc in delta.get("tool_calls", []):
         evts.extend(_tool_events(tc))
     if is_last or finish is not None:
@@ -111,7 +112,7 @@ class OpenAIToAnthropicStreamAdapter:
                 ev.append({"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}})
                 self._bopen = True
             if text != "":
-                ev.append({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": text}})
+                ev.append({"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": unescape_text(text)}})
         for tc in delta.get("tool_calls", []):
             if tc.get("id") and self._bopen:
                 ev.append({"type": "content_block_stop", "index": 0})

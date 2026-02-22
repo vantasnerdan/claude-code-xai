@@ -10,6 +10,10 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from bridge.logging_config import get_logger
+
+logger = get_logger("forward")
+
 
 # --- Enrichment Hook Type ---
 # A callable that receives the tool list and returns a modified tool list.
@@ -27,6 +31,7 @@ def set_tool_enrichment_hook(hook: ToolEnrichmentHook | None) -> None:
     """
     global _tool_enrichment_hook
     _tool_enrichment_hook = hook
+    logger.debug("Tool enrichment hook %s", "registered" if hook else "cleared")
 
 
 def translate_tools(
@@ -46,6 +51,10 @@ def translate_tools(
     # --- Enrichment injection point ---
     tools = anthropic_tools
     if _tool_enrichment_hook is not None:
+        logger.debug(
+            "Running enrichment hook on %d tools",
+            len(anthropic_tools),
+        )
         tools = _tool_enrichment_hook(tools)
 
     result: list[dict[str, Any]] = []

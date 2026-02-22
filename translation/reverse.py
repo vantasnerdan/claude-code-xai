@@ -10,9 +10,11 @@ import json
 import uuid
 from typing import Any
 
+from bridge.logging_config import get_logger
 from translation.config import TranslationConfig, STOP_REASON_MAP
 
 _config = TranslationConfig()
+logger = get_logger("reverse")
 
 _ERROR_TYPE_MAP: dict[str, str] = {
     "rate_limit_error": "rate_limit_error",
@@ -56,7 +58,13 @@ def openai_to_anthropic(response: dict[str, Any]) -> dict[str, Any]:
 def translate_response(response: dict[str, Any], status_code: int = 200) -> dict[str, Any]:
     """Translate an OpenAI response or error to Anthropic format."""
     if 200 <= status_code < 300:
-        return openai_to_anthropic(response)
+        result = openai_to_anthropic(response)
+        logger.debug(
+            "Reverse translation: %d content blocks, stop=%s",
+            len(result.get("content", [])), result.get("stop_reason"),
+        )
+        return result
+    logger.debug("Translating error response status=%d", status_code)
     return _translate_error(response, status_code)
 
 

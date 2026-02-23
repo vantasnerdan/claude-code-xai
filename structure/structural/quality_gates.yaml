@@ -41,3 +41,48 @@ tools:
     quality:
       reliability: high
       engine: ripgrep
+
+  Write:
+    warnings:
+      - Overwrites the entire file — all content not included in your write is lost
+      - Must Read existing files before overwriting them
+      - Never proactively create documentation files unless explicitly requested
+    quality:
+      reliability: high
+      safety: destructive to existing content — prefer Edit for modifications
+
+  Glob:
+    warnings:
+      - Returns paths sorted by modification time, not alphabetically
+      - Does not search file contents — use Grep for content matching
+    quality:
+      reliability: high
+      coverage: any file system pattern
+
+  WebFetch:
+    warnings:
+      - Authenticated or private URLs will fail without clear error
+      - HTTP URLs are automatically upgraded to HTTPS
+      - Content from very large pages may be summarized or truncated
+      - 15-minute cache means repeated fetches may return stale content
+    quality:
+      reliability: medium
+      dependency: external network and target site availability
+
+  WebSearch:
+    warnings:
+      - Results may not reflect the most recent information
+      - Always use the current year in search queries for recent data
+      - Must include Sources section with URLs in the response
+    quality:
+      reliability: medium
+      dependency: external search service availability
+
+  NotebookEdit:
+    warnings:
+      - Cell numbering is 0-indexed — first cell is cell_number 0
+      - Must Read the notebook first to understand cell structure
+      - cell_type is required when using edit_mode=insert
+    quality:
+      reliability: high
+      coverage: code and markdown cell types

@@ -53,3 +53,28 @@ tools:
       - Grep
     on_error:
       no_matches: Try a broader pattern or check the directory path
+
+  WebFetch:
+    related:
+      - WebSearch
+      - Read
+    on_error:
+      url_unreachable: Check the URL is valid and publicly accessible
+      redirect_loop: Use the redirect URL provided in the error response
+      content_too_large: Try a more specific page URL or use WebSearch to find a better source
+
+  WebSearch:
+    related:
+      - WebFetch
+      - Read
+    on_error:
+      no_results: Try broader or alternative search terms
+      rate_limited: Wait briefly and retry with a more focused query
+
+  NotebookEdit:
+    related:
+      - Read
+      - Write
+    on_error:
+      cell_not_found: Use Read to check the notebook cell count and indices
+      notebook_not_found: Use Glob to locate the .ipynb file first

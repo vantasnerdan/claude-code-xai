@@ -29,3 +29,41 @@ tools:
       suggestion: Increase timeout parameter (max 600000ms) or use run_in_background
     - error: Command failed
       suggestion: Check that file paths with spaces are double-quoted
+
+  Glob:
+    - error: No matches found
+      suggestion: Try a broader pattern or verify the directory path exists
+    - error: Invalid glob pattern
+      suggestion: Check pattern syntax — use ** for recursive matching, * for single-level
+
+  Grep:
+    - error: No matches found
+      suggestion: Try a broader regex pattern or different file type filter
+    - error: Invalid regex pattern
+      suggestion: Check regex syntax — literal braces need escaping with backslash
+
+  WebFetch:
+    - error: URL not reachable
+      suggestion: Verify the URL is valid and publicly accessible — authenticated URLs will fail
+    - error: Redirect to different host
+      suggestion: Make a new WebFetch request using the redirect URL provided in the response
+    - error: Content too large
+      suggestion: Try a more specific page URL or use WebSearch to find a smaller source
+    - error: Authentication required
+      suggestion: This URL requires login — use gh CLI for GitHub or specialized tools for other services
+
+  WebSearch:
+    - error: Query too broad
+      suggestion: Add specific keywords, dates, or domain filters to narrow results
+    - error: No results found
+      suggestion: Try alternative search terms or check spelling
+    - error: Rate limited
+      suggestion: Wait briefly before retrying — consider caching previous results
+
+  NotebookEdit:
+    - error: Cell not found
+      suggestion: Use Read on the notebook to check cell count — cell_number is 0-indexed
+    - error: Invalid cell type
+      suggestion: cell_type must be "code" or "markdown"
+    - error: Notebook path not found
+      suggestion: Use Glob to locate the .ipynb file — notebook_path must be absolute

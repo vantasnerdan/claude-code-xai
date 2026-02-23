@@ -47,3 +47,36 @@ tools:
     - anti_pattern: Using Bash find instead of Glob
       why_bad: Slower and loses integration with the tool system
       do_instead: Use Glob with pattern matching
+
+  WebFetch:
+    - anti_pattern: Fetching authenticated or private URLs
+      why_bad: Will fail silently or return login pages instead of content
+      do_instead: Use gh CLI for GitHub, or specialized tools for authenticated services
+    - anti_pattern: Fetching without checking if a specialized tool exists
+      why_bad: GitHub, Jira, and other services have dedicated tools that work better
+      do_instead: Check for gh CLI, MCP tools, or other service-specific integrations first
+    - anti_pattern: Not handling redirect responses
+      why_bad: Cross-host redirects return a redirect URL instead of content
+      do_instead: Check the response for redirect_url and make a follow-up request
+
+  WebSearch:
+    - anti_pattern: Searching the web when the answer is in local files
+      why_bad: Wastes time and may return irrelevant results when Grep/Read would be faster
+      do_instead: Search the codebase first with Grep, then fall back to WebSearch
+    - anti_pattern: Using overly broad search queries
+      why_bad: Returns too many irrelevant results, wastes context on noise
+      do_instead: Use specific keywords, add year for recent info, use domain filters
+    - anti_pattern: Omitting the Sources section after using search results
+      why_bad: Violates the mandatory requirement to cite sources with URLs
+      do_instead: Always include a Sources section with markdown hyperlinks at the end
+
+  NotebookEdit:
+    - anti_pattern: Editing a notebook without reading it first
+      why_bad: Cell indices and content are unknown — edits will target wrong cells
+      do_instead: Always Read the .ipynb file first to understand cell structure
+    - anti_pattern: Using Write or Edit on .ipynb files instead of NotebookEdit
+      why_bad: Destroys notebook metadata, cell outputs, and kernel state
+      do_instead: Use NotebookEdit for all Jupyter notebook modifications
+    - anti_pattern: Using wrong cell index (forgetting 0-indexing)
+      why_bad: Edits the wrong cell — cell_number 1 is the second cell, not the first
+      do_instead: Remember cell_number is 0-indexed and verify with Read first

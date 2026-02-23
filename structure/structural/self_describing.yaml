@@ -56,3 +56,41 @@ tools:
         items:
           type: string
         description: Matching file paths sorted by modification time
+
+  WebFetch:
+    type: object
+    properties:
+      content:
+        type: string
+        description: Processed content from the URL, converted from HTML to markdown
+      redirect_url:
+        type: string
+        description: Redirect URL if the request was redirected to a different host
+
+  WebSearch:
+    type: object
+    properties:
+      results:
+        type: array
+        items:
+          type: object
+          properties:
+            title:
+              type: string
+            url:
+              type: string
+            snippet:
+              type: string
+        description: Search results with titles, URLs, and text snippets
+
+  NotebookEdit:
+    type: object
+    properties:
+      success:
+        type: boolean
+      cell_number:
+        type: integer
+        description: The 0-indexed cell number that was edited, inserted, or deleted
+      edit_mode:
+        type: string
+        description: The operation performed — replace, insert, or delete

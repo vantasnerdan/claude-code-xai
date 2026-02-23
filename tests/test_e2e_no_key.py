@@ -40,6 +40,9 @@ from fastapi.testclient import TestClient
 import main
 from main import app
 
+# Repo root derived from this file's location (tests/ -> parent)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
 
 # ── Fixtures ──────────────────────────────────────────────────────────
 
@@ -629,18 +632,18 @@ class TestQuickstartDefaults:
 
     def test_env_example_exists(self) -> None:
         """A .env.example file exists documenting configuration."""
-        env_example = Path("/home/kelvin/projects/claude-code-xai/.env.example")
+        env_example = REPO_ROOT / ".env.example"
         assert env_example.exists(), ".env.example should exist for quickstart docs"
 
     def test_env_example_documents_required_vars(self) -> None:
         """The .env.example includes the required XAI_API_KEY variable."""
-        env_example = Path("/home/kelvin/projects/claude-code-xai/.env.example")
+        env_example = REPO_ROOT / ".env.example"
         content = env_example.read_text()
         assert "XAI_API_KEY" in content
 
     def test_env_example_documents_optional_vars(self) -> None:
         """The .env.example includes optional configuration variables."""
-        env_example = Path("/home/kelvin/projects/claude-code-xai/.env.example")
+        env_example = REPO_ROOT / ".env.example"
         content = env_example.read_text()
         expected_vars = ["GROK_MODEL", "ENRICHMENT_MODE", "PREAMBLE_ENABLED"]
         for var in expected_vars:
@@ -648,7 +651,7 @@ class TestQuickstartDefaults:
 
     def test_env_example_documents_all_known_vars(self) -> None:
         """The .env.example should document all config variables the app reads."""
-        env_example = Path("/home/kelvin/projects/claude-code-xai/.env.example")
+        env_example = REPO_ROOT / ".env.example"
         content = env_example.read_text()
 
         # These are all the env vars the app reads from main.py and config files

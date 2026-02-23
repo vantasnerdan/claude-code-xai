@@ -1,0 +1,31 @@
+schema_version: "1.0"
+pattern: errors
+pattern_number: 3
+type: structural
+description: >
+  Standard error format with suggestion — structured error documentation per tool.
+
+tools:
+  Read:
+    - error: File not found
+      suggestion: Use Glob to search for the file by name pattern
+    - error: Empty file
+      suggestion: File exists but has no content — this is a valid state
+
+  Edit:
+    - error: old_string not found
+      suggestion: Read the file first to see exact content including whitespace
+    - error: old_string not unique
+      suggestion: Include more surrounding lines to make the match unique
+    - error: File not read yet
+      suggestion: You must Read the file at least once before editing it
+
+  Write:
+    - error: File not read yet
+      suggestion: Read existing files before overwriting them
+
+  Bash:
+    - error: Command timed out
+      suggestion: Increase timeout parameter (max 600000ms) or use run_in_background
+    - error: Command failed
+      suggestion: Check that file paths with spaces are double-quoted

@@ -1,0 +1,49 @@
+schema_version: "1.0"
+pattern: anti_patterns
+pattern_number: 14
+type: structural
+description: >
+  Anti-patterns — known failure modes and what to do instead per tool.
+
+tools:
+  Read:
+    - anti_pattern: Using Bash cat/head/tail instead of Read
+      why_bad: Loses line number context and permission integration
+      do_instead: Use Read tool with file_path parameter
+
+  Edit:
+    - anti_pattern: Editing without reading first
+      why_bad: old_string will not match actual file content
+      do_instead: Always Read the file before Edit
+    - anti_pattern: Using Write to make small changes
+      why_bad: Overwrites entire file, losing content you didn't include
+      do_instead: Use Edit for surgical changes to existing files
+
+  Write:
+    - anti_pattern: Creating files proactively without being asked
+      why_bad: Creates unnecessary file bloat and documentation noise
+      do_instead: Only create files when explicitly required by the task
+    - anti_pattern: Overwriting existing files without reading them
+      why_bad: Loses all content not in your write
+      do_instead: Read first, prefer Edit for existing files
+
+  Bash:
+    - anti_pattern: Using Bash for file operations (cat, sed, grep, find, echo >)
+      why_bad: Bypasses dedicated tools that have safety features and permission integration
+      do_instead: Use Read, Edit, Write, Grep, Glob respectively
+    - anti_pattern: Running destructive git commands without explicit user request
+      why_bad: push --force, reset --hard, clean -f can permanently destroy work
+      do_instead: Only run destructive commands when the user explicitly asks
+    - anti_pattern: Using interactive flags (-i) with commands
+      why_bad: Interactive input is not supported — command will hang
+      do_instead: Use non-interactive alternatives
+
+  Grep:
+    - anti_pattern: Using Bash grep/rg instead of Grep tool
+      why_bad: Loses permission integration and optimized output formatting
+      do_instead: Use the Grep tool with pattern and optional glob filter
+
+  Glob:
+    - anti_pattern: Using Bash find instead of Glob
+      why_bad: Slower and loses integration with the tool system
+      do_instead: Use Glob with pattern matching

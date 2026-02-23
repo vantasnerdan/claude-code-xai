@@ -14,10 +14,12 @@ class NearMissApplicator(PatternApplicator):
 
     Enriches tool definitions with aliases and common misuses so the
     bridge can suggest corrections when a model tries to use a wrong tool.
+
+    Args:
+        tool_data: Per-tool alias data from YAML. When None, uses built-in defaults.
     """
 
-    # Known aliases and common confusions
-    TOOL_ALIASES: dict[str, dict[str, Any]] = {
+    _DEFAULTS: dict[str, dict[str, Any]] = {
         "Read": {
             "aliases": ["cat", "view", "open", "show"],
             "commonly_confused_with": ["Bash cat", "Bash head"],
@@ -44,6 +46,9 @@ class NearMissApplicator(PatternApplicator):
         },
     }
 
+    def __init__(self, tool_data: dict[str, dict[str, Any]] | None = None) -> None:
+        self._tool_aliases = tool_data if tool_data is not None else self._DEFAULTS
+
     @property
     def pattern_number(self) -> int:
         return 5
@@ -57,7 +62,7 @@ class NearMissApplicator(PatternApplicator):
         enriched = copy.deepcopy(tools)
         for tool in enriched:
             tool_name = tool.get("name", "")
-            aliases = self.TOOL_ALIASES.get(tool_name)
+            aliases = self._tool_aliases.get(tool_name)
             if aliases:
                 tool["_near_miss"] = aliases
         return enriched

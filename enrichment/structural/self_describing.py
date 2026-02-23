@@ -17,10 +17,12 @@ class SelfDescribingApplicator(PatternApplicator):
     exists (from the original tool definition), it is preserved. If missing,
     a stub is added. outputSchema is always added since tool definitions
     typically lack it.
+
+    Args:
+        tool_data: Per-tool output schema data from YAML. When None, uses built-in defaults.
     """
 
-    # Known output schemas for Claude Code tools
-    OUTPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+    _DEFAULTS: dict[str, dict[str, Any]] = {
         "Read": {
             "type": "object",
             "properties": {
@@ -73,6 +75,9 @@ class SelfDescribingApplicator(PatternApplicator):
         },
     }
 
+    def __init__(self, tool_data: dict[str, dict[str, Any]] | None = None) -> None:
+        self._output_schemas = tool_data if tool_data is not None else self._DEFAULTS
+
     @property
     def pattern_number(self) -> int:
         return 6
@@ -100,7 +105,7 @@ class SelfDescribingApplicator(PatternApplicator):
                 }
 
             # Add outputSchema from known schemas
-            output_schema = self.OUTPUT_SCHEMAS.get(tool_name)
+            output_schema = self._output_schemas.get(tool_name)
             if output_schema:
                 tool["outputSchema"] = output_schema
 

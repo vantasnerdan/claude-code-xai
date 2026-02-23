@@ -15,9 +15,12 @@ class AntiPatternsApplicator(PatternApplicator):
 
     Adds documented failure modes and anti-patterns to each tool so
     the model avoids common mistakes that trained models learn to avoid.
+
+    Args:
+        tool_data: Per-tool anti-pattern data from YAML. When None, uses built-in defaults.
     """
 
-    TOOL_ANTI_PATTERNS: dict[str, list[dict[str, str]]] = {
+    _DEFAULTS: dict[str, list[dict[str, str]]] = {
         "Read": [
             {
                 "anti_pattern": "Using Bash cat/head/tail instead of Read",
@@ -82,6 +85,9 @@ class AntiPatternsApplicator(PatternApplicator):
         ],
     }
 
+    def __init__(self, tool_data: dict[str, list[dict[str, str]]] | None = None) -> None:
+        self._tool_anti_patterns = tool_data if tool_data is not None else self._DEFAULTS
+
     @property
     def pattern_number(self) -> int:
         return 14
@@ -95,7 +101,7 @@ class AntiPatternsApplicator(PatternApplicator):
         enriched = copy.deepcopy(tools)
         for tool in enriched:
             tool_name = tool.get("name", "")
-            anti_patterns = self.TOOL_ANTI_PATTERNS.get(tool_name)
+            anti_patterns = self._tool_anti_patterns.get(tool_name)
             if anti_patterns:
                 tool["_anti_patterns"] = anti_patterns
         return enriched
@@ -105,7 +111,7 @@ class AntiPatternsApplicator(PatternApplicator):
         issues = []
         for tool in tools:
             tool_name = tool.get("name", "<unnamed>")
-            if tool_name in self.TOOL_ANTI_PATTERNS and "_anti_patterns" not in tool:
+            if tool_name in self._tool_anti_patterns and "_anti_patterns" not in tool:
                 issues.append({
                     "tool": tool_name,
                     "issue": "Missing _anti_patterns documentation",

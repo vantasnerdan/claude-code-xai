@@ -1,0 +1,44 @@
+schema_version: "1.0"
+description: >
+  Master index of all enrichment pattern definitions.
+  Each entry maps to a YAML file in the corresponding subdirectory.
+
+structural:
+  - file: structural/manifest.yaml
+    pattern_number: 1
+    name: Manifest
+  - file: structural/hateoas.yaml
+    pattern_number: 2
+    name: HATEOAS
+  - file: structural/errors.yaml
+    pattern_number: 3
+    name: Error Format
+  - file: structural/near_miss.yaml
+    pattern_number: 5
+    name: Near-Miss
+  - file: structural/self_describing.yaml
+    pattern_number: 6
+    name: Self-Describing
+  - file: structural/quality_gates.yaml
+    pattern_number: 8
+    name: Quality Gates
+  - file: structural/anti_patterns.yaml
+    pattern_number: 14
+    name: Anti-Patterns
+  - file: structural/tool_registration.yaml
+    pattern_number: 15
+    name: Tool Registration
+
+behavioral:
+  - file: behavioral/what.yaml
+    dimension: what
+  - file: behavioral/why.yaml
+    dimension: why
+  - file: behavioral/when.yaml
+    dimension: when
+
+preamble:
+  - file: preamble/identity.yaml
+    name: Identity
+  - file: preamble/behavioral.yaml
+    name: Behavioral Conventions

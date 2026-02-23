@@ -1,0 +1,51 @@
+schema_version: "1.0"
+dimension: what
+type: behavioral
+description: >
+  WHAT dimension — enhanced descriptions of what each tool does,
+  beyond the raw tool description.
+
+tools:
+  Read: >
+    Reads file contents from the local filesystem. Supports text files,
+    images (PNG, JPG — rendered visually), PDFs (up to 20 pages per request),
+    and Jupyter notebooks (all cells with outputs). Returns content with
+    line numbers (cat -n format). Lines longer than 2000 characters are truncated.
+
+  Edit: >
+    Performs exact string replacements in files. Surgical edits that
+    preserve surrounding code. The old_string must be unique in the file
+    or the edit will fail. Use replace_all=True for renaming across the file.
+
+  Write: >
+    Creates or completely overwrites a file on the local filesystem.
+    If the file exists, you MUST Read it first. Prefer Edit for existing files.
+
+  Bash: >
+    Executes bash commands with optional timeout (up to 10 minutes).
+    Working directory persists between calls; shell state does not.
+    For git, npm, docker, and system operations — NOT for file operations.
+
+  Grep: >
+    Searches file contents using regex patterns. Built on ripgrep for speed.
+    Supports output modes: content (matching lines), files_with_matches (paths only),
+    count (match counts). Supports context lines (-A, -B, -C) and glob filtering.
+
+  Glob: >
+    Fast file pattern matching. Find files by name patterns like
+    '**/*.py' or 'src/**/*.ts'. Returns matching paths sorted by
+    modification time.
+
+  WebFetch: >
+    Fetches content from a URL and processes it with an AI model.
+    Converts HTML to markdown. Includes a 15-minute cache.
+    WILL FAIL for authenticated or private URLs.
+
+  WebSearch: >
+    Searches the web and returns results with links. Provides
+    up-to-date information beyond the model's knowledge cutoff.
+    Supports domain filtering.
+
+  NotebookEdit: >
+    Replaces, inserts, or deletes cells in Jupyter notebooks (.ipynb).
+    Cell numbering is 0-indexed. Supports code and markdown cell types.

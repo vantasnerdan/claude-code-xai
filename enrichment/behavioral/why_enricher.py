@@ -16,7 +16,13 @@ class WhyEnricher(BehavioralEnricher):
     The WHY dimension captures:
       - problem_context: What problem this tool solves
       - failure_modes: What goes wrong when misused
+
+    Args:
+        tool_data: Per-tool WHY dicts from YAML. When None, uses built-in TOOL_KNOWLEDGE.
     """
+
+    def __init__(self, tool_data: dict[str, dict[str, Any]] | None = None) -> None:
+        self._tool_data = tool_data
 
     @property
     def dimension(self) -> str:
@@ -29,9 +35,14 @@ class WhyEnricher(BehavioralEnricher):
         """
         enriched = copy.deepcopy(tool)
         tool_name = tool.get("name", "")
-        knowledge = TOOL_KNOWLEDGE.get(tool_name)
 
-        if knowledge and "why" in knowledge:
-            enriched["behavioral_why"] = knowledge["why"]
+        if self._tool_data is not None:
+            why_data = self._tool_data.get(tool_name)
+            if why_data:
+                enriched["behavioral_why"] = why_data
+        else:
+            knowledge = TOOL_KNOWLEDGE.get(tool_name)
+            if knowledge and "why" in knowledge:
+                enriched["behavioral_why"] = knowledge["why"]
 
         return enriched

@@ -14,7 +14,22 @@ class ToolRegistrationApplicator(PatternApplicator):
 
     Adds WebMCP-compatible registration metadata to tool definitions
     so they can be consumed by any tool registration system.
+
+    Args:
+        registration_data: Static registration fields from YAML.
+            When None, uses built-in defaults.
     """
+
+    _DEFAULTS: dict[str, str] = {
+        "protocol": "claude-code-bridge",
+        "namespace": "claude_code",
+        "version": "0.1.0",
+    }
+
+    def __init__(self, registration_data: dict[str, str] | None = None) -> None:
+        self._registration_fields = (
+            registration_data if registration_data is not None else self._DEFAULTS
+        )
 
     @property
     def pattern_number(self) -> int:
@@ -30,10 +45,8 @@ class ToolRegistrationApplicator(PatternApplicator):
         for tool in enriched:
             tool_name = tool.get("name", "")
             tool["_registration"] = {
-                "protocol": "claude-code-bridge",
                 "tool_name": tool_name,
-                "namespace": "claude_code",
-                "version": "0.1.0",
+                **self._registration_fields,
             }
         return enriched
 

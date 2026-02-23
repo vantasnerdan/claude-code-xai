@@ -14,10 +14,12 @@ class ErrorFormatApplicator(PatternApplicator):
 
     Adds error format documentation to tool definitions so the model
     knows the structure of error responses and how to handle them.
+
+    Args:
+        tool_data: Per-tool error data from YAML. When None, uses built-in defaults.
     """
 
-    # Common error patterns per tool
-    TOOL_ERRORS: dict[str, list[dict[str, str]]] = {
+    _DEFAULTS: dict[str, list[dict[str, str]]] = {
         "Read": [
             {
                 "error": "File not found",
@@ -60,6 +62,9 @@ class ErrorFormatApplicator(PatternApplicator):
         ],
     }
 
+    def __init__(self, tool_data: dict[str, list[dict[str, str]]] | None = None) -> None:
+        self._tool_errors = tool_data if tool_data is not None else self._DEFAULTS
+
     @property
     def pattern_number(self) -> int:
         return 3
@@ -73,7 +78,7 @@ class ErrorFormatApplicator(PatternApplicator):
         enriched = copy.deepcopy(tools)
         for tool in enriched:
             tool_name = tool.get("name", "")
-            errors = self.TOOL_ERRORS.get(tool_name)
+            errors = self._tool_errors.get(tool_name)
             if errors:
                 tool["_error_format"] = {
                     "errors": errors,
@@ -89,7 +94,7 @@ class ErrorFormatApplicator(PatternApplicator):
         issues = []
         for tool in tools:
             tool_name = tool.get("name", "<unnamed>")
-            if tool_name in self.TOOL_ERRORS and "_error_format" not in tool:
+            if tool_name in self._tool_errors and "_error_format" not in tool:
                 issues.append({
                     "tool": tool_name,
                     "issue": "Missing _error_format documentation",

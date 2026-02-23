@@ -14,9 +14,12 @@ class QualityGatesApplicator(PatternApplicator):
 
     Adds warnings array and quality flags to tool definitions so the
     model is aware of limitations and edge cases before using a tool.
+
+    Args:
+        tool_data: Per-tool quality data from YAML. When None, uses built-in defaults.
     """
 
-    TOOL_QUALITY: dict[str, dict[str, Any]] = {
+    _DEFAULTS: dict[str, dict[str, Any]] = {
         "Read": {
             "warnings": [
                 "Lines longer than 2000 characters are truncated",
@@ -51,6 +54,9 @@ class QualityGatesApplicator(PatternApplicator):
         },
     }
 
+    def __init__(self, tool_data: dict[str, dict[str, Any]] | None = None) -> None:
+        self._tool_quality = tool_data if tool_data is not None else self._DEFAULTS
+
     @property
     def pattern_number(self) -> int:
         return 8
@@ -64,7 +70,7 @@ class QualityGatesApplicator(PatternApplicator):
         enriched = copy.deepcopy(tools)
         for tool in enriched:
             tool_name = tool.get("name", "")
-            quality_data = self.TOOL_QUALITY.get(tool_name)
+            quality_data = self._tool_quality.get(tool_name)
             if quality_data:
                 tool["_quality"] = quality_data
         return enriched
@@ -74,7 +80,7 @@ class QualityGatesApplicator(PatternApplicator):
         issues = []
         for tool in tools:
             tool_name = tool.get("name", "<unnamed>")
-            if tool_name in self.TOOL_QUALITY and "_quality" not in tool:
+            if tool_name in self._tool_quality and "_quality" not in tool:
                 issues.append({
                     "tool": tool_name,
                     "issue": "Missing _quality warnings and quality flags",

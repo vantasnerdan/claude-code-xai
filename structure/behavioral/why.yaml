@@ -1,0 +1,94 @@
+schema_version: "1.0"
+dimension: why
+type: behavioral
+description: >
+  WHY dimension — problem context and failure modes per tool.
+
+tools:
+  Read:
+    problem_context: >
+      You must understand existing code before modifying it. Reading
+      prevents blind edits that break things. The line numbers in output
+      help you construct exact old_string matches for Edit.
+    failure_modes:
+      - Editing a file without reading it first will likely produce incorrect old_string matches
+      - Using Bash cat/head/tail instead of Read loses line number context
+      - Reading a large PDF without the pages parameter will fail — use pages for PDFs over 10 pages
+      - Passing a relative path instead of an absolute path will fail
+
+  Edit:
+    problem_context: >
+      Surgical edits preserve surrounding code. Full rewrites via Write
+      risk losing context and introducing bugs. The exact-match requirement
+      prevents accidental edits to the wrong location.
+    failure_modes:
+      - Using Edit without Read first — the old_string won't match if you haven't seen the actual file content
+      - Using Bash sed/awk instead of Edit loses the safety of exact-match replacement
+      - Non-unique old_string causes the edit to fail — provide more surrounding context to disambiguate
+      - Including line number prefixes from Read output in old_string — those are display artifacts, not file content
+
+  Write:
+    problem_context: >
+      Use for creating new files. For existing files, prefer Edit to
+      preserve surrounding code. Write overwrites the entire file, so
+      anything not included in your content is lost.
+    failure_modes:
+      - Overwriting an existing file without reading it first loses all content not in your write
+      - Creating files unnecessarily leads to file bloat — always prefer editing existing files
+      - Writing documentation files (*.md, README) proactively when not asked creates unwanted artifacts
+
+  Bash:
+    problem_context: >
+      Terminal operations that require shell execution. Dedicated tools
+      exist for file operations and should be used instead for safety
+      and integration with the permission system.
+    failure_modes:
+      - Using Bash for file reads (cat) instead of Read tool
+      - Using Bash for file search (find, grep) instead of Glob/Grep tools
+      - Using Bash for file edits (sed, awk) instead of Edit tool
+      - Using Bash for file writes (echo >) instead of Write tool
+      - Not quoting file paths with spaces causes command failure
+      - Using interactive flags (-i) with git commands fails — no interactive input supported
+
+  Grep:
+    problem_context: >
+      Find code patterns, function definitions, imports, and usages across
+      the entire codebase efficiently. Integrated with the permission system.
+    failure_modes:
+      - Using Bash grep/rg instead of the Grep tool loses integration with the permission system
+      - Searching without glob filter in large repos returns too many results
+      - Literal braces in patterns need escaping (use interface\{\} to find interface{} in Go)
+
+  Glob:
+    problem_context: >
+      Locate files by name or extension before reading or searching
+      their contents. Faster and more integrated than Bash find.
+    failure_modes:
+      - Using Bash find instead of Glob loses integration and is slower
+      - Using Bash ls for file discovery misses nested files
+
+  WebFetch:
+    problem_context: >
+      Retrieve and analyze public web content. Not suitable for
+      authenticated services — use specialized tools for GitHub,
+      Jira, Confluence, etc.
+    failure_modes:
+      - Fetching authenticated URLs (Google Docs, private GitHub) will fail
+      - For GitHub URLs, prefer gh CLI via Bash instead
+      - HTTP URLs are automatically upgraded to HTTPS
+
+  WebSearch:
+    problem_context: >
+      Access current information for recent events, documentation,
+      or data that may have changed since the model's training cutoff.
+    failure_modes:
+      - Forgetting to include Sources section with URLs in the response
+      - Using the wrong year in search queries — always use the current year
+
+  NotebookEdit:
+    problem_context: >
+      Edit Jupyter notebooks cell-by-cell rather than rewriting the
+      entire JSON structure. Preserves notebook metadata and outputs.
+    failure_modes:
+      - Using Write to modify .ipynb files destroys notebook metadata and cell outputs
+      - Forgetting that cell_number is 0-indexed

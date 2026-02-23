@@ -1,0 +1,12 @@
+schema_version: "1.0"
+pattern: manifest
+pattern_number: 1
+type: structural
+description: >
+  Manifest metadata — version, capabilities, and tool count.
+  Applied dynamically at enrichment time (tool_count computed from input).
+
+# Manifest data is computed, not per-tool. These are the static fields.
+manifest:
+  source: claude-code-xai-bridge
+  enrichment_version: "0.1.0"

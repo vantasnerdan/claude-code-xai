@@ -1,0 +1,55 @@
+schema_version: "1.0"
+pattern: hateoas
+pattern_number: 2
+type: structural
+description: >
+  HATEOAS navigation links — related tools and error recovery paths.
+
+tools:
+  Read:
+    related:
+      - Edit
+      - Write
+      - Glob
+      - Grep
+    on_error:
+      file_not_found: Use Glob to locate the file first
+
+  Edit:
+    related:
+      - Read
+      - Write
+    on_error:
+      old_string_not_found: Use Read to see the actual file content
+      old_string_not_unique: Include more surrounding context in old_string
+
+  Write:
+    related:
+      - Read
+      - Edit
+    on_error:
+      file_exists: Use Read first, then prefer Edit over Write
+
+  Bash:
+    related:
+      - Read
+      - Grep
+      - Glob
+      - Edit
+      - Write
+    on_error:
+      command_failed: Check file paths are quoted if they contain spaces
+
+  Grep:
+    related:
+      - Read
+      - Glob
+    on_error:
+      no_matches: Try a broader pattern or different glob filter
+
+  Glob:
+    related:
+      - Read
+      - Grep
+    on_error:
+      no_matches: Try a broader pattern or check the directory path

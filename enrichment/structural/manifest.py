@@ -14,7 +14,18 @@ class ManifestApplicator(PatternApplicator):
 
     Ensures tool definitions include manifest metadata that describes
     the overall tool collection (version, count, source).
+
+    Args:
+        manifest_data: Static manifest fields from YAML. When None, uses built-in defaults.
     """
+
+    _DEFAULTS: dict[str, str] = {
+        "source": "claude-code-xai-bridge",
+        "enrichment_version": "0.1.0",
+    }
+
+    def __init__(self, manifest_data: dict[str, str] | None = None) -> None:
+        self._manifest_fields = manifest_data if manifest_data is not None else self._DEFAULTS
 
     @property
     def pattern_number(self) -> int:
@@ -28,12 +39,12 @@ class ManifestApplicator(PatternApplicator):
         """Add manifest metadata to tool definitions.
 
         Adds a '_manifest' key to each tool with collection-level metadata.
+        tool_count is always computed from the input list.
         """
         enriched = copy.deepcopy(tools)
         manifest = {
             "tool_count": len(enriched),
-            "source": "claude-code-xai-bridge",
-            "enrichment_version": "0.1.0",
+            **self._manifest_fields,
         }
         for tool in enriched:
             tool["_manifest"] = manifest

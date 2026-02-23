@@ -19,7 +19,13 @@ class WhenEnricher(BehavioralEnricher):
       - use_instead_of: Tools this one replaces
       - do_not_use_for: Operations where another tool is preferred
       - sequencing: Natural language description of tool ordering
+
+    Args:
+        tool_data: Per-tool WHEN dicts from YAML. When None, uses built-in TOOL_KNOWLEDGE.
     """
+
+    def __init__(self, tool_data: dict[str, dict[str, Any]] | None = None) -> None:
+        self._tool_data = tool_data
 
     @property
     def dimension(self) -> str:
@@ -33,9 +39,14 @@ class WhenEnricher(BehavioralEnricher):
         """
         enriched = copy.deepcopy(tool)
         tool_name = tool.get("name", "")
-        knowledge = TOOL_KNOWLEDGE.get(tool_name)
 
-        if knowledge and "when" in knowledge:
-            enriched["behavioral_when"] = knowledge["when"]
+        if self._tool_data is not None:
+            when_data = self._tool_data.get(tool_name)
+            if when_data:
+                enriched["behavioral_when"] = when_data
+        else:
+            knowledge = TOOL_KNOWLEDGE.get(tool_name)
+            if knowledge and "when" in knowledge:
+                enriched["behavioral_when"] = knowledge["when"]
 
         return enriched

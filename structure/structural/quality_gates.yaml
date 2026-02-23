@@ -1,0 +1,43 @@
+schema_version: "1.0"
+pattern: quality_gates
+pattern_number: 8
+type: structural
+description: >
+  Warnings and quality flags — known limitations and edge cases per tool.
+
+tools:
+  Read:
+    warnings:
+      - Lines longer than 2000 characters are truncated
+      - Large PDFs require pages parameter — reading without it will fail
+      - Default reads up to 2000 lines — use offset/limit for large files
+    quality:
+      reliability: high
+      coverage: text, images, PDFs, notebooks
+
+  Edit:
+    warnings:
+      - old_string must be unique in the file or edit fails
+      - Indentation must match exactly (tabs vs spaces matter)
+      - Must Read the file first in the same conversation
+    quality:
+      reliability: high
+      safety: exact-match prevents wrong-location edits
+
+  Bash:
+    warnings:
+      - Shell state does not persist between calls (only working directory does)
+      - Default timeout is 2 minutes — set timeout for long-running commands
+      - Interactive commands (-i flag) are not supported
+      - Output truncated at 30000 characters
+    quality:
+      reliability: medium
+      safety: commands can have side effects
+
+  Grep:
+    warnings:
+      - Single-line matching by default — use multiline: true for cross-line patterns
+      - Literal braces need escaping in patterns
+    quality:
+      reliability: high
+      engine: ripgrep

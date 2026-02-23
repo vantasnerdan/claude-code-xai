@@ -1,0 +1,63 @@
+schema_version: "1.0"
+pattern: near_miss
+pattern_number: 5
+type: structural
+description: >
+  Near-miss suggestions — aliases and common confusions per tool.
+
+tools:
+  Read:
+    aliases:
+      - cat
+      - view
+      - open
+      - show
+    commonly_confused_with:
+      - Bash cat
+      - Bash head
+
+  Edit:
+    aliases:
+      - replace
+      - modify
+      - patch
+    commonly_confused_with:
+      - Bash sed
+      - Write
+
+  Write:
+    aliases:
+      - create
+      - save
+      - output
+    commonly_confused_with:
+      - Edit
+      - Bash echo
+
+  Grep:
+    aliases:
+      - search
+      - find_in_files
+      - rg
+    commonly_confused_with:
+      - Bash grep
+      - Bash rg
+      - Glob
+
+  Glob:
+    aliases:
+      - find_files
+      - locate
+      - ls
+    commonly_confused_with:
+      - Bash find
+      - Bash ls
+      - Grep
+
+  Bash:
+    aliases:
+      - shell
+      - terminal
+      - exec
+      - run
+    commonly_confused_with: []

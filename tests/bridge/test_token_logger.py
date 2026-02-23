@@ -12,28 +12,9 @@ from typing import Any
 import pytest
 
 from bridge.token_logger import (
-    estimate_tokens,
     log_token_usage,
     measure_enrichment_overhead,
 )
-
-
-class TestEstimateTokens:
-    """Token estimation from character count."""
-
-    def test_empty_string_returns_one(self) -> None:
-        assert estimate_tokens("") == 1
-
-    def test_short_text(self) -> None:
-        # 12 chars -> 3 tokens
-        assert estimate_tokens("hello world!") == 3
-
-    def test_longer_text(self) -> None:
-        text = "a" * 400
-        assert estimate_tokens(text) == 100
-
-    def test_single_char_returns_one(self) -> None:
-        assert estimate_tokens("x") == 1
 
 
 class TestMeasureEnrichmentOverhead:
@@ -114,14 +95,27 @@ class TestLogTokenUsage:
                 enrichment_overhead_tokens=20,
                 elapsed_seconds=1.5,
                 is_streaming=False,
+                model="grok-4-1-fast-reasoning",
             )
         msg = caplog.records[0].message
+        assert "model=grok-4-1-fast-reasoning" in msg
         assert "input=100" in msg
         assert "output=50" in msg
         assert "total=150" in msg
         assert "enrichment_overhead=20" in msg
         assert "mode=sync" in msg
         assert "elapsed=1.50s" in msg
+
+    def test_model_defaults_to_unknown(
+        self, caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        with caplog.at_level(logging.INFO, logger="bridge.tokens"):
+            log_token_usage(
+                input_tokens=10,
+                output_tokens=5,
+            )
+        msg = caplog.records[0].message
+        assert "model=unknown" in msg
 
     def test_streaming_mode_label(
         self, caplog: pytest.LogCaptureFixture,

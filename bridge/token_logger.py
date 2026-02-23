@@ -20,16 +20,6 @@ from bridge.logging_config import get_logger
 logger = get_logger("tokens")
 
 
-def estimate_tokens(text: str) -> int:
-    """Estimate token count from character length.
-
-    Uses the standard approximation of ~4 characters per token for
-    English text and code. This is not exact but sufficient for
-    logging purposes without adding a tokenizer dependency.
-    """
-    return max(1, len(text) // 4)
-
-
 def measure_enrichment_overhead(
     original_tools: list[dict[str, Any]],
     enriched_tools: list[dict[str, Any]],
@@ -60,6 +50,7 @@ def log_token_usage(
     enrichment_overhead_tokens: int = 0,
     elapsed_seconds: float = 0.0,
     is_streaming: bool = False,
+    model: str = "",
 ) -> dict[str, Any]:
     """Log token counts for a completed request.
 
@@ -72,6 +63,7 @@ def log_token_usage(
         enrichment_overhead_tokens: Estimated tokens added by enrichment.
         elapsed_seconds: Total request time in seconds.
         is_streaming: Whether this was a streaming request.
+        model: The resolved model name used for this request.
     """
     total_tokens = input_tokens + output_tokens
     mode = "stream" if is_streaming else "sync"
@@ -84,8 +76,9 @@ def log_token_usage(
     }
 
     logger.info(
-        "Token usage: input=%d output=%d total=%d "
+        "Token usage: model=%s input=%d output=%d total=%d "
         "enrichment_overhead=%d mode=%s elapsed=%.2fs",
+        model or "unknown",
         input_tokens,
         output_tokens,
         total_tokens,

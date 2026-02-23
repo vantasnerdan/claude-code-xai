@@ -1,4 +1,5 @@
 schema_version: "1.0"
+type: manifest
 description: >
   Master index of all enrichment pattern definitions.
   Each entry maps to a YAML file in the corresponding subdirectory.

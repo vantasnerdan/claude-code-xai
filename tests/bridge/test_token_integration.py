@@ -171,7 +171,6 @@ class TestEnrichmentOverheadTracking:
             set_tool_enrichment_hook,
         )
         # Clear hook
-        original_hook = None
         try:
             set_tool_enrichment_hook(None)
             tools = [{"name": "Read", "description": "R", "input_schema": {"type": "object"}}]

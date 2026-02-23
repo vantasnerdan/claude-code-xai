@@ -86,7 +86,7 @@ async def messages(request: Request):
         headers = {"Authorization": f"Bearer {XAI_API_KEY}", "Content-Type": "application/json"}
 
         if openai_body.get("stream"):
-            return await _stream(openai_body, headers, bridge_warnings, start)
+            return await _stream(openai_body, headers, bridge_warnings, start, model=openai_body.get("model", ""))
 
         resp = await client.post("/chat/completions", json=openai_body, headers=headers)
         data = resp.json()
@@ -115,6 +115,7 @@ async def messages(request: Request):
             enrichment_overhead_tokens=get_last_enrichment_overhead(),
             elapsed_seconds=elapsed,
             is_streaming=False,
+            model=openai_body.get("model", ""),
         )
 
         # -- Point 3: Full response at DEBUG --
@@ -147,6 +148,7 @@ async def messages(request: Request):
 async def _stream(
     openai_body: dict, headers: dict[str, str],
     bridge_warnings: list[str] | None = None, start_time: float = 0,
+    model: str = "",
 ) -> StreamingResponse:
     event_count = 0
     enrichment_overhead = get_last_enrichment_overhead()
@@ -175,6 +177,7 @@ async def _stream(
                 enrichment_overhead_tokens=enrichment_overhead,
                 elapsed_seconds=elapsed,
                 is_streaming=True,
+                model=model,
             )
 
     response_headers = {}

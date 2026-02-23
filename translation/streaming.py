@@ -61,6 +61,7 @@ class OpenAIToAnthropicStreamAdapter:
         self._src = source
         self._on = self._done = self._topen = self._bopen = False
         self._q: list[dict[str, Any]] = []
+        self.usage: dict[str, int] = {}
 
     def __aiter__(self) -> OpenAIToAnthropicStreamAdapter:
         return self
@@ -100,9 +101,15 @@ class OpenAIToAnthropicStreamAdapter:
     def _xlate(self, c: dict[str, Any]) -> list[dict[str, Any]]:
         choices = c.get("choices", [])
         if not choices:
+            # Some providers send a usage-only chunk after [DONE]-style final
+            if "usage" in c:
+                self.usage = c["usage"]
             return []
         ev: list[dict[str, Any]] = []
         delta, fin = choices[0].get("delta", {}), choices[0].get("finish_reason")
+        # Capture usage from any chunk that includes it (typically the final one)
+        if "usage" in c:
+            self.usage = c["usage"]
         if not self._on:
             self._on = True
             ev.append(_msg_start(c))

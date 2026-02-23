@@ -10,6 +10,7 @@ Logger hierarchy:
   bridge.forward    - Anthropic-to-OpenAI translation
   bridge.reverse    - OpenAI-to-Anthropic translation
   bridge.enrichment - Tool enrichment pipeline
+  bridge.tokens     - Per-request token usage and enrichment overhead
 """
 
 from __future__ import annotations
@@ -41,7 +42,7 @@ def configure_logging() -> None:
     logging.basicConfig(format=_LOG_FORMAT, level=level, force=True)
 
     # Set bridge loggers to the configured level
-    for name in ("bridge.main", "bridge.forward", "bridge.reverse", "bridge.enrichment"):
+    for name in ("bridge.main", "bridge.forward", "bridge.reverse", "bridge.enrichment", "bridge.tokens"):
         logging.getLogger(name).setLevel(level)
 
     # Quiet noisy third-party loggers at INFO

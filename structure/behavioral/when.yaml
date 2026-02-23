@@ -1,0 +1,111 @@
+schema_version: "1.0"
+dimension: when
+type: behavioral
+description: >
+  WHEN dimension — prerequisites, alternatives, and sequencing per tool.
+
+tools:
+  Read:
+    prerequisites: []
+    use_before:
+      - Edit
+      - Write
+    use_instead_of:
+      - Bash cat
+      - Bash head
+      - Bash tail
+    sequencing: >
+      Use after Glob/Grep to find files, before Edit to modify them.
+      For large files, use offset and limit parameters to read in chunks.
+
+  Edit:
+    prerequisites:
+      - Read
+    use_before: []
+    use_instead_of:
+      - Bash sed
+      - Bash awk
+    sequencing: >
+      Always Read the file first. Use Edit for targeted changes, Write
+      only for new files or complete rewrites.
+
+  Write:
+    prerequisites:
+      - Read (if file exists)
+    use_before: []
+    use_instead_of:
+      - Bash echo
+      - Bash cat heredoc
+    sequencing: >
+      Check if file exists first. If yes, prefer Edit. If no, Write is correct.
+      Never proactively create documentation files unless explicitly requested.
+
+  Bash:
+    prerequisites: []
+    use_before: []
+    use_instead_of: []
+    do_not_use_for:
+      - Reading files (use Read)
+      - Searching files (use Grep/Glob)
+      - Editing files (use Edit)
+      - Writing files (use Write)
+    sequencing: >
+      Reserve for git operations, package management, running tests,
+      docker commands, and other terminal-specific tasks. Chain dependent
+      commands with && not newlines.
+
+  Grep:
+    prerequisites: []
+    use_before:
+      - Read
+    use_instead_of:
+      - Bash grep
+      - Bash rg
+    sequencing: >
+      Use to find relevant files/lines, then Read for full context,
+      then Edit to modify. Combine with Glob when you need both name
+      and content matching.
+
+  Glob:
+    prerequisites: []
+    use_before:
+      - Read
+      - Grep
+    use_instead_of:
+      - Bash find
+      - Bash ls
+    sequencing: >
+      Use first to locate files by name, then Grep to search contents,
+      then Read for full file context. Multiple Glob calls can run in
+      parallel for different patterns.
+
+  WebFetch:
+    prerequisites: []
+    use_before: []
+    use_instead_of: []
+    do_not_use_for:
+      - GitHub operations (use gh CLI via Bash)
+      - Authenticated services (use specialized tools)
+    sequencing: >
+      Check if a specialized tool exists first (e.g., gh for GitHub).
+      Only use WebFetch for public, unauthenticated URLs.
+
+  WebSearch:
+    prerequisites: []
+    use_before:
+      - WebFetch
+    use_instead_of: []
+    sequencing: >
+      Search first to find relevant URLs, then WebFetch specific pages
+      for detailed content. Always include Sources section in response.
+
+  NotebookEdit:
+    prerequisites:
+      - Read (to see current notebook state)
+    use_before: []
+    use_instead_of:
+      - Write (for .ipynb files)
+      - Edit (for .ipynb files)
+    sequencing: >
+      Read the notebook first to understand cell structure, then use
+      NotebookEdit for targeted cell changes.

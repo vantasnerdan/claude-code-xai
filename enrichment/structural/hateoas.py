@@ -14,10 +14,13 @@ class HateoasApplicator(PatternApplicator):
 
     Adds _links to each tool definition with navigation hints:
     related tools, error recovery paths, and documentation references.
+
+    Args:
+        tool_data: Per-tool link data from YAML. When None, uses built-in defaults.
     """
 
-    # Known relationships between tools
-    TOOL_LINKS: dict[str, dict[str, Any]] = {
+    # Built-in defaults (used when no YAML data is provided)
+    _DEFAULTS: dict[str, dict[str, Any]] = {
         "Read": {
             "related": ["Edit", "Write", "Glob", "Grep"],
             "on_error": {"file_not_found": "Use Glob to locate the file first"},
@@ -47,6 +50,9 @@ class HateoasApplicator(PatternApplicator):
         },
     }
 
+    def __init__(self, tool_data: dict[str, dict[str, Any]] | None = None) -> None:
+        self._tool_links = tool_data if tool_data is not None else self._DEFAULTS
+
     @property
     def pattern_number(self) -> int:
         return 2
@@ -60,7 +66,7 @@ class HateoasApplicator(PatternApplicator):
         enriched = copy.deepcopy(tools)
         for tool in enriched:
             tool_name = tool.get("name", "")
-            links = self.TOOL_LINKS.get(tool_name, {})
+            links = self._tool_links.get(tool_name, {})
             if links:
                 tool["_links"] = links
         return enriched

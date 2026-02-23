@@ -1,0 +1,14 @@
+schema_version: "1.0"
+pattern: tool_registration
+pattern_number: 15
+type: structural
+description: >
+  WebMCP / tool registration compatibility metadata.
+  Applied dynamically — registration block computed from tool name.
+
+# Registration data is computed per-tool at apply time.
+# These are the static fields used in the registration block.
+registration:
+  protocol: claude-code-bridge
+  namespace: claude_code
+  version: "0.1.0"

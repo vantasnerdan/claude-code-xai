@@ -1,0 +1,58 @@
+schema_version: "1.0"
+pattern: self_describing
+pattern_number: 6
+type: structural
+description: >
+  Self-describing schemas — output schemas for tools that lack them.
+
+tools:
+  Read:
+    type: object
+    properties:
+      content:
+        type: string
+        description: File content with line numbers (cat -n format)
+
+  Edit:
+    type: object
+    properties:
+      success:
+        type: boolean
+      error:
+        type: string
+        description: Error message if edit failed
+
+  Write:
+    type: object
+    properties:
+      success:
+        type: boolean
+      file_path:
+        type: string
+        description: Path of written file
+
+  Bash:
+    type: object
+    properties:
+      stdout:
+        type: string
+      stderr:
+        type: string
+      exit_code:
+        type: integer
+
+  Grep:
+    type: object
+    properties:
+      matches:
+        type: array
+        description: Matching lines, file paths, or counts depending on output_mode
+
+  Glob:
+    type: object
+    properties:
+      files:
+        type: array
+        items:
+          type: string
+        description: Matching file paths sorted by modification time

@@ -15,7 +15,13 @@ class WhatEnricher(BehavioralEnricher):
 
     The WHAT dimension replaces or augments the raw tool description with
     a more detailed version that captures nuances learned through RL training.
+
+    Args:
+        tool_data: Per-tool WHAT strings from YAML. When None, uses built-in TOOL_KNOWLEDGE.
     """
+
+    def __init__(self, tool_data: dict[str, str] | None = None) -> None:
+        self._tool_data = tool_data
 
     @property
     def dimension(self) -> str:
@@ -29,9 +35,14 @@ class WhatEnricher(BehavioralEnricher):
         """
         enriched = copy.deepcopy(tool)
         tool_name = tool.get("name", "")
-        knowledge = TOOL_KNOWLEDGE.get(tool_name)
 
-        if knowledge and "what" in knowledge:
-            enriched["behavioral_what"] = knowledge["what"]
+        if self._tool_data is not None:
+            what_text = self._tool_data.get(tool_name)
+            if what_text:
+                enriched["behavioral_what"] = what_text
+        else:
+            knowledge = TOOL_KNOWLEDGE.get(tool_name)
+            if knowledge and "what" in knowledge:
+                enriched["behavioral_what"] = knowledge["what"]
 
         return enriched

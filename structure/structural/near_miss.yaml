@@ -61,3 +61,37 @@ tools:
       - exec
       - run
     commonly_confused_with: []
+
+  WebFetch:
+    aliases:
+      - fetch
+      - curl
+      - wget
+      - download
+      - http_get
+    commonly_confused_with:
+      - Bash curl
+      - Bash wget
+      - WebSearch
+
+  WebSearch:
+    aliases:
+      - search
+      - google
+      - web_search
+      - find_online
+      - lookup
+    commonly_confused_with:
+      - Grep
+      - WebFetch
+
+  NotebookEdit:
+    aliases:
+      - jupyter
+      - notebook
+      - ipynb
+      - cell_edit
+      - notebook_write
+    commonly_confused_with:
+      - Write
+      - Edit

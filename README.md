@@ -178,6 +178,7 @@ python -m benchmarks --output-dir results/  # Save to directory
 | `GROK_MODEL` | `grok-4-1-fast-reasoning` | Grok model to use |
 | `ENRICHMENT_MODE` | `full` | `passthrough` / `structural` / `full` |
 | `PREAMBLE_ENABLED` | `true` | System prompt behavioral injection |
+| `STRUCTURE_DIR` | `./structure` | Path to enrichment YAML definitions |
 | `HOST` | `0.0.0.0` | Bridge listen address |
 | `PORT` | `4000` | Bridge listen port |
 
@@ -309,9 +310,173 @@ claude-code-xai/
 │       ├── multi_tool_chain.py   # Glob→Grep→Read→Edit sequencing
 │       ├── error_recovery.py     # Error handling and recovery
 │       └── complex_schema.py     # Nested schema enrichment
-├── tests/                   # 235+ tests
+├── structure/               # Editable enrichment definitions (YAML)
+│   ├── manifest.yaml        # Master index of all enrichment files
+│   ├── behavioral/          # WHAT/WHY/WHEN per tool (3 files)
+│   ├── structural/          # API Standard patterns per tool (8 files)
+│   └── preamble/            # Identity and conventions (2 files)
+├── tests/                   # 490+ tests
 └── docker-compose.yml       # One-command deployment
 ```
+
+## Structure Directory
+
+The `structure/` directory contains all enrichment definitions as editable YAML files. This is the data layer that the enrichment engine applies to tool definitions at request time. Edit a file, and the next request picks up the change -- no restart required.
+
+### Directory Layout
+
+```
+structure/
+├── manifest.yaml              # Master index: lists every enrichment file and its role
+├── behavioral/                # Layer 1: Training transfer (WHAT/WHY/WHEN)
+│   ├── what.yaml              # Enhanced descriptions for 9 tools
+│   ├── why.yaml               # Problem context and failure modes per tool
+│   └── when.yaml              # Prerequisites, sequencing, and alternatives per tool
+├── structural/                # Layer 2: API Standard patterns
+│   ├── manifest.yaml          # P1: Machine-Readable Manifest metadata
+│   ├── hateoas.yaml           # P2: Related tools and recovery links per tool
+│   ├── errors.yaml            # P3: Common errors with suggestions per tool
+│   ├── near_miss.yaml         # P5: Aliases and commonly confused tools
+│   ├── self_describing.yaml   # P6: Output JSON Schema per tool
+│   ├── quality_gates.yaml     # P8: Warnings and quality metrics per tool
+│   ├── anti_patterns.yaml     # P14: Known misuse patterns per tool
+│   └── tool_registration.yaml # P15: WebMCP registration metadata
+└── preamble/                  # Layer 3: System prompt injection
+    ├── identity.yaml          # Grok identity assertion
+    └── behavioral.yaml        # Tool conventions (sequencing, safety, output rules)
+```
+
+### Three Enrichment Layers
+
+**Behavioral** (`behavioral/`) -- teaches the model *what* each tool does, *why* it matters, and *when* to use it. This is the training transfer layer: the knowledge Claude acquires through RL, made explicit and portable. Each file covers one dimension across all 9 Claude Code tools.
+
+Example from `behavioral/what.yaml`:
+
+```yaml
+schema_version: "1.0"
+dimension: what
+type: behavioral
+
+tools:
+  Read: >
+    Reads file contents from the local filesystem. Supports text files,
+    images (PNG, JPG), PDFs (up to 20 pages per request), and Jupyter
+    notebooks. Returns content with line numbers (cat -n format).
+
+  Edit: >
+    Performs exact string replacements in files. The old_string must be
+    unique in the file or the edit will fail. Use replace_all=True for
+    renaming across the file.
+```
+
+**Structural** (`structural/`) -- applies Agentic API Standard patterns to tool definitions. Each file maps to one pattern and contains per-tool entries. The structural layer makes tools self-describing, navigable, and recoverable.
+
+**Preamble** (`preamble/`) -- injects behavioral conventions and identity context into the system prompt. The identity file establishes Grok's persona. The behavioral file encodes 6 sections of agent conventions: tool preference hierarchy, sequencing rules, chaining patterns, parallelism guidance, safety patterns, and output conventions.
+
+### How StructureLoader Works
+
+The `StructureLoader` class (`enrichment/structure_loader.py`) loads and caches all YAML definitions using mtime-based lazy reload:
+
+1. On each request, it stats the `structure/` directory (one syscall, ~1 microsecond)
+2. If the directory mtime is unchanged, it serves from cache -- zero file I/O
+3. If the mtime has changed (any file was edited), it reparses all YAML files
+4. Schema validation runs on every reload: each file must have `schema_version` and a valid `type` field
+5. If any YAML is malformed or missing required fields, the loader raises `StructureLoadError` at startup -- fail-fast, never serve broken enrichment
+
+This means: edit a YAML file, and the very next request through the bridge uses the updated definitions. No process restart. No Docker rebuild. No redeployment.
+
+### Custom Structure Directory
+
+By default, the loader uses `structure/` at the repository root. Override with the `STRUCTURE_DIR` environment variable:
+
+```bash
+STRUCTURE_DIR=/path/to/custom/structure python main.py
+```
+
+For Docker deployments, mount the structure directory as a volume so edits persist across container restarts:
+
+```yaml
+# docker-compose.yml
+volumes:
+  - ./structure:/app/structure
+```
+
+## Self-Optimization Guide
+
+The structure directory is not just configuration -- it is a living enrichment layer. Definitions can evolve based on real usage, edited by human operators or by agents running through the bridge itself.
+
+### Human Operator Editing
+
+Edit any YAML file in `structure/` to improve enrichment quality. The change takes effect on the next request.
+
+**Example: Improve the Read tool description**
+
+Edit `structure/behavioral/what.yaml` to add detail about symlink handling:
+
+```yaml
+  Read: >
+    Reads file contents from the local filesystem. Supports text files,
+    images (PNG, JPG), PDFs (up to 20 pages per request), and Jupyter
+    notebooks. Returns content with line numbers (cat -n format).
+    Follows symlinks — the resolved path is used for permission checks.
+```
+
+Save the file. The next request through the bridge enriches the Read tool with the updated description. Grok (or any model using the bridge) now knows about symlink behavior.
+
+**Example: Add a new anti-pattern**
+
+Edit `structure/structural/anti_patterns.yaml` to flag a failure mode discovered in production:
+
+```yaml
+  Edit:
+    - anti_pattern: Editing without reading first
+      why_bad: old_string will not match actual file content
+      do_instead: Always Read the file before Edit
+    - anti_pattern: Using Write to make small changes
+      why_bad: Overwrites entire file, losing content you didn't include
+      do_instead: Use Edit for surgical changes to existing files
+    - anti_pattern: Including line number prefixes in old_string
+      why_bad: Line numbers from Read output are display artifacts, not file content
+      do_instead: Copy the actual text after the line number prefix
+```
+
+### Agent Self-Editing
+
+An agent with Bash or Write tool access running through the bridge can edit structure files at runtime. This is the path from static enrichment to a system that learns from its own usage.
+
+**How it works**: The agent uses its Write or Bash tool to modify a YAML file in the `structure/` directory. The StructureLoader detects the mtime change on the next request and reloads. The agent's subsequent tool calls benefit from the updated enrichment.
+
+Concrete scenarios:
+
+- **Discovered a new sequencing rule**: An agent finds that running Grep before Glob produces better results for a specific workflow. It edits `structure/behavioral/when.yaml` to add this guidance under the Grep tool's `sequencing` field.
+
+- **Found a new error pattern**: An agent encounters a Bash timeout that is not documented. It edits `structure/structural/errors.yaml` to add a new error/suggestion pair under the Bash tool.
+
+- **Refined a behavioral convention**: An agent notices that the preamble's tool chaining patterns section is missing a common workflow. It edits `structure/preamble/behavioral.yaml` to add a new chaining pattern to the `text` field.
+
+### How Changes Take Effect
+
+1. Agent (or human) writes to a file in `structure/`
+2. The file's parent directory mtime updates (automatic on any modern filesystem)
+3. StructureLoader stats the directory on the next request, detects the mtime change
+4. All YAML files are reparsed and validated
+5. The enrichment engine uses the new definitions for that request and all subsequent requests
+
+No restart. No rebuild. No redeployment. The bridge is always serving the latest definitions.
+
+### Safety
+
+**YAML schema validation** prevents malformed definitions from breaking enrichment. Every YAML file must include `schema_version` and `type` fields with valid values. If validation fails, the loader raises an error rather than serving corrupt data.
+
+**Git tracks all changes**. The structure directory is committed in the repository. Every edit -- whether by a human or an agent -- is a git-trackable change. Rollback is `git checkout structure/` or `git revert`. The full history of enrichment evolution is preserved in the commit log.
+
+**Data only, never code**. Structure files are YAML data consumed by the Python enrichment engine. An agent can change what data the engine uses, but cannot change the engine itself. This is a hard boundary: no dynamic code loading, no eval, no plugin execution from structure files.
+
+### The Vision
+
+Static enrichment is a snapshot of what we knew when we built it. Dynamic enrichment lets the system learn. An agent that discovers "Grok works better when the Edit tool description mentions line-count validation" can wire that knowledge in immediately -- and every subsequent request benefits.
+
+This is the path from "bridge" to "living enrichment layer." Enrichment definitions evolve based on real usage, not just developer intuition.
 
 ## Built By
 

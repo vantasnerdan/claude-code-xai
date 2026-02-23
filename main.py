@@ -14,10 +14,11 @@ import time
 from dotenv import load_dotenv
 
 from bridge.logging_config import configure_logging, get_logger, dump_json, sanitize_request
+from bridge.token_logger import log_token_usage
 from translation.forward import anthropic_to_openai, strip_thinking
 from translation.reverse import translate_response
 from translation.streaming import OpenAIToAnthropicStreamAdapter
-from translation.tools import set_tool_enrichment_hook
+from translation.tools import set_tool_enrichment_hook, get_last_enrichment_overhead, reset_enrichment_overhead
 from enrichment.factory import create_enricher
 
 load_dotenv()
@@ -55,6 +56,7 @@ async def health() -> dict:
 async def messages(request: Request):
     body = await request.json()
     start = time.time()
+    reset_enrichment_overhead()
 
     # -- Point 2: Outgoing request summary (INFO) --
     msg_count = len(body.get("messages", []))
@@ -106,6 +108,15 @@ async def messages(request: Request):
             usage.get("total_tokens", 0),
         )
 
+        # -- Token usage logging (Issue #26) --
+        log_token_usage(
+            input_tokens=usage.get("prompt_tokens", 0),
+            output_tokens=usage.get("completion_tokens", 0),
+            enrichment_overhead_tokens=get_last_enrichment_overhead(),
+            elapsed_seconds=elapsed,
+            is_streaming=False,
+        )
+
         # -- Point 3: Full response at DEBUG --
         logger.debug("xAI response body: %s", json.dumps(data, default=str))
         dump_json("response", data)
@@ -138,6 +149,7 @@ async def _stream(
     bridge_warnings: list[str] | None = None, start_time: float = 0,
 ) -> StreamingResponse:
     event_count = 0
+    enrichment_overhead = get_last_enrichment_overhead()
 
     async def gen():
         nonlocal event_count
@@ -154,6 +166,16 @@ async def _stream(
                 yield f"event: {event.get('type', 'unknown')}\ndata: {json.dumps(event)}\n\n"
             elapsed = time.time() - start_time if start_time else 0
             logger.info("Streaming complete events=%d elapsed=%.2fs", event_count, elapsed)
+
+            # -- Token usage logging for streaming (Issue #26) --
+            usage = adapter.usage
+            log_token_usage(
+                input_tokens=usage.get("prompt_tokens", 0),
+                output_tokens=usage.get("completion_tokens", 0),
+                enrichment_overhead_tokens=enrichment_overhead,
+                elapsed_seconds=elapsed,
+                is_streaming=True,
+            )
 
     response_headers = {}
     if bridge_warnings:

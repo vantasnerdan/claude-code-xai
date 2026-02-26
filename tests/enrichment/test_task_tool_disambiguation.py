@@ -218,6 +218,51 @@ class TestYamlOrchestrationTools:
         assert len(tool["sequencing"]) > 10
 
 
+class TestYamlTypeSafety:
+    """Guard against YAML parsing bugs where colon-space in strings produces dicts."""
+
+    @pytest.fixture
+    def yaml_dir(self) -> Path:
+        """Path to the behavioral YAML directory."""
+        return Path(__file__).resolve().parent.parent.parent / "structure" / "behavioral"
+
+    @pytest.fixture
+    def why_yaml(self, yaml_dir: Path) -> dict[str, Any]:
+        """Parsed why.yaml."""
+        with open(yaml_dir / "why.yaml") as f:
+            return yaml.safe_load(f)
+
+    def test_all_failure_modes_are_strings(self, why_yaml: dict) -> None:
+        """Every failure_mode entry in why.yaml must be a string, not a dict.
+
+        YAML parses unquoted 'key: value' as a mapping. If a failure_mode
+        contains a colon-space (e.g. 'run_in_background: true'), it must
+        be quoted to remain a string.
+        """
+        tools = why_yaml["tools"]
+        for tool_name, tool_data in tools.items():
+            if "failure_modes" not in tool_data:
+                continue
+            for i, mode in enumerate(tool_data["failure_modes"]):
+                assert isinstance(mode, str), (
+                    f"{tool_name} failure_modes[{i}] is {type(mode).__name__}, "
+                    f"not str. Likely unquoted colon-space in YAML. "
+                    f"Value: {mode!r}"
+                )
+
+    @pytest.mark.parametrize("tool_name", ORCHESTRATION_TOOLS)
+    def test_orchestration_failure_modes_are_strings(
+        self, why_yaml: dict, tool_name: str
+    ) -> None:
+        """Each orchestration tool's failure_modes are all strings."""
+        modes = why_yaml["tools"][tool_name]["failure_modes"]
+        for i, mode in enumerate(modes):
+            assert isinstance(mode, str), (
+                f"{tool_name} failure_modes[{i}] is {type(mode).__name__}, "
+                f"not str. Value: {mode!r}"
+            )
+
+
 class TestPreambleYamlSection7:
     """The preamble behavioral.yaml must also contain Section 7."""
 

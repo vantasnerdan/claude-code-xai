@@ -112,7 +112,7 @@ tools:
     failure_modes:
       - Using TaskCreate instead of Task — TaskCreate only creates a tracking entry, no work happens
       - Vague prompts produce vague results — always include scope, context, acceptance criteria, and constraints
-      - Forgetting run_in_background: true causes the orchestrator to block until the subagent finishes
+      - "Forgetting run_in_background: true causes the orchestrator to block until the subagent finishes"
 
   TaskUpdate:
     problem_context: >

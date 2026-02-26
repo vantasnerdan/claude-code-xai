@@ -92,3 +92,46 @@ tools:
     failure_modes:
       - Using Write to modify .ipynb files destroys notebook metadata and cell outputs
       - Forgetting that cell_number is 0-indexed
+
+  # --- Orchestration Tools ---
+  TaskCreate:
+    problem_context: >
+      Task planning and task execution are separate steps. TaskCreate
+      only records intent — it does not cause any action. Use it to
+      organize a work plan before launching subagents with the Task tool.
+    failure_modes:
+      - Confusing TaskCreate with the Task tool — TaskCreate does NOT launch a subagent or perform work
+      - Believing that creating a task entry means work is happening in the background — it is not
+      - Using TaskCreate when you need actual execution — use the Task tool instead
+
+  Task:
+    problem_context: >
+      This is the execution tool — the only way to delegate actual work
+      to a subagent. Unlike TaskCreate (which only creates a tracking entry),
+      the Task tool starts an autonomous agent that performs real operations.
+    failure_modes:
+      - Using TaskCreate instead of Task — TaskCreate only creates a tracking entry, no work happens
+      - Vague prompts produce vague results — always include scope, context, acceptance criteria, and constraints
+      - Forgetting run_in_background: true causes the orchestrator to block until the subagent finishes
+
+  TaskUpdate:
+    problem_context: >
+      Tracking management — mark tasks as complete, update status, or
+      add notes. This is bookkeeping, not execution.
+    failure_modes:
+      - Expecting TaskUpdate to trigger work — it only updates the tracking record
+
+  TaskGet:
+    problem_context: >
+      Check the current state of a specific task. Useful for verifying
+      whether a task has been completed or reviewing its details.
+    failure_modes:
+      - Expecting TaskGet to execute work — it only reads the tracking record
+
+  TaskList:
+    problem_context: >
+      Overview of all planned and in-progress work. Useful for
+      identifying what has been completed, what is pending, and what
+      is blocked.
+    failure_modes:
+      - Expecting TaskList to execute tasks — it only lists tracking records

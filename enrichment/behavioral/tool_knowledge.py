@@ -276,4 +276,140 @@ TOOL_KNOWLEDGE: dict[str, dict[str, Any]] = {
             ),
         },
     },
+    # --- Orchestration Tools ---
+    # These tools manage task tracking and subagent execution.
+    # Critical: TaskCreate (tracking) and Task (execution) are frequently confused.
+    "TaskCreate": {
+        "what": (
+            "Creates a TRACKING ENTRY in the task list. No work is performed. "
+            "No subagent is launched. No API calls are made. It is a checklist "
+            "item for organizing and planning what needs to be done."
+        ),
+        "why": {
+            "problem_context": (
+                "Task planning and task execution are separate steps. TaskCreate "
+                "only records intent — it does not cause any action. Use it to "
+                "organize a work plan before launching subagents with the Task tool."
+            ),
+            "failure_modes": [
+                "Confusing TaskCreate with the Task tool — TaskCreate does NOT launch a subagent or perform work",
+                "Believing that creating a task entry means work is happening in the background — it is not",
+                "Using TaskCreate when you need actual execution — use the Task tool instead",
+            ],
+        },
+        "when": {
+            "prerequisites": [],
+            "use_before": ["Task"],
+            "use_instead_of": [],
+            "sequencing": (
+                "Use TaskCreate first to plan and organize work items. Then use "
+                "the Task tool to actually execute each item. TaskCreate without "
+                "a subsequent Task call means no work gets done."
+            ),
+        },
+    },
+    "Task": {
+        "what": (
+            "Launches a REAL SUBAGENT that autonomously performs work. The subagent "
+            "reads files, makes API calls, writes code, and posts comments. Use "
+            "run_in_background: true for non-blocking execution."
+        ),
+        "why": {
+            "problem_context": (
+                "This is the execution tool — the only way to delegate actual work "
+                "to a subagent. Unlike TaskCreate (which only creates a tracking entry), "
+                "the Task tool starts an autonomous agent that performs real operations."
+            ),
+            "failure_modes": [
+                "Using TaskCreate instead of Task — TaskCreate only creates a tracking entry, no work happens",
+                "Vague prompts produce vague results — always include scope, context, acceptance criteria, and constraints",
+                "Forgetting run_in_background: true causes the orchestrator to block until the subagent finishes",
+            ],
+        },
+        "when": {
+            "prerequisites": ["TaskCreate (optional, for tracking)"],
+            "use_before": ["TaskUpdate (to record completion)"],
+            "use_instead_of": [],
+            "sequencing": (
+                "Structure the prompt with: task scope (one clear deliverable), "
+                "context (file paths, prior decisions), acceptance criteria (how to "
+                "verify completion), constraints (boundaries, what NOT to do), and "
+                "reminders (skills to read, conventions to follow). Launch independent "
+                "tasks in parallel with run_in_background: true."
+            ),
+        },
+    },
+    "TaskUpdate": {
+        "what": (
+            "Updates the status or metadata of an existing tracking entry. Does not "
+            "perform any work. Does not launch a subagent."
+        ),
+        "why": {
+            "problem_context": (
+                "Tracking management — mark tasks as complete, update status, or "
+                "add notes. This is bookkeeping, not execution."
+            ),
+            "failure_modes": [
+                "Expecting TaskUpdate to trigger work — it only updates the tracking record",
+            ],
+        },
+        "when": {
+            "prerequisites": ["TaskCreate"],
+            "use_before": [],
+            "use_instead_of": [],
+            "sequencing": (
+                "Use after a Task subagent completes to record the outcome. "
+                "Or use to update status during long-running work."
+            ),
+        },
+    },
+    "TaskGet": {
+        "what": (
+            "Reads a single tracking entry by ID. Returns task metadata, status, "
+            "and description. Does not perform any work."
+        ),
+        "why": {
+            "problem_context": (
+                "Check the current state of a specific task. Useful for verifying "
+                "whether a task has been completed or reviewing its details."
+            ),
+            "failure_modes": [
+                "Expecting TaskGet to execute work — it only reads the tracking record",
+            ],
+        },
+        "when": {
+            "prerequisites": ["TaskCreate"],
+            "use_before": ["TaskUpdate"],
+            "use_instead_of": [],
+            "sequencing": (
+                "Use to check task status before deciding next steps. "
+                "Combine with TaskList for a full picture of all tracked work."
+            ),
+        },
+    },
+    "TaskList": {
+        "what": (
+            "Lists all tracking entries with their status and metadata. Returns "
+            "the full task list. Does not perform any work."
+        ),
+        "why": {
+            "problem_context": (
+                "Overview of all planned and in-progress work. Useful for "
+                "identifying what has been completed, what is pending, and what "
+                "is blocked."
+            ),
+            "failure_modes": [
+                "Expecting TaskList to execute tasks — it only lists tracking records",
+            ],
+        },
+        "when": {
+            "prerequisites": [],
+            "use_before": ["Task", "TaskUpdate"],
+            "use_instead_of": [],
+            "sequencing": (
+                "Use at session start to review outstanding work, or after "
+                "completing a batch of tasks to verify all items are done."
+            ),
+        },
+    },
 }

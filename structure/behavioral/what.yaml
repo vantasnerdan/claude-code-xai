@@ -49,3 +49,26 @@ tools:
   NotebookEdit: >
     Replaces, inserts, or deletes cells in Jupyter notebooks (.ipynb).
     Cell numbering is 0-indexed. Supports code and markdown cell types.
+
+  # --- Orchestration Tools ---
+  TaskCreate: >
+    Creates a TRACKING ENTRY in the task list. No work is performed.
+    No subagent is launched. No API calls are made. It is a checklist
+    item for organizing and planning what needs to be done.
+
+  Task: >
+    Launches a REAL SUBAGENT that autonomously performs work. The subagent
+    reads files, makes API calls, writes code, and posts comments. Use
+    run_in_background: true for non-blocking execution.
+
+  TaskUpdate: >
+    Updates the status or metadata of an existing tracking entry. Does not
+    perform any work. Does not launch a subagent.
+
+  TaskGet: >
+    Reads a single tracking entry by ID. Returns task metadata, status,
+    and description. Does not perform any work.
+
+  TaskList: >
+    Lists all tracking entries with their status and metadata. Returns
+    the full task list. Does not perform any work.

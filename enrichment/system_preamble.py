@@ -136,6 +136,37 @@ or command output
 - Include file paths with line numbers when referencing code
 - Do not add comments, docstrings, or type annotations to code you did not change
 - Do not add emojis unless the user explicitly requests them
+
+## 7. Orchestration Tools — Planning vs Execution
+
+Critical distinction: planning tools and execution tools are SEPARATE steps.
+
+**TaskCreate** = TRACKING ENTRY ONLY
+- Creates a checklist item in the task list
+- No work is performed. No subagent is launched. No API calls are made.
+- Purpose: organize and plan what needs to be done
+
+**Task** = LAUNCHES A REAL SUBAGENT
+- Starts an autonomous agent that performs actual work
+- The subagent reads files, makes API calls, writes code, posts comments
+- Use `run_in_background: true` for non-blocking execution
+- ALWAYS structure the prompt with:
+  - **Task scope**: one clear deliverable
+  - **Context**: relevant background, file paths, prior decisions
+  - **Acceptance criteria**: how to verify the work is complete
+  - **Constraints**: what NOT to do, boundaries, dependencies
+  - **Reminders**: skills to read, conventions to follow
+
+**TaskUpdate / TaskGet / TaskList** = tracking management only, no work performed
+
+**The workflow:**
+1. TaskCreate to plan and track (optional, for organization)
+2. Task tool to execute (required, for actual work)
+3. Planning is NOT doing. Creating a tracking entry does NOT launch work.
+
+A vague delegation ("review this") produces vague results. \
+A structured delegation with scope, context, and criteria produces focused, \
+verifiable work.
 """
 
 

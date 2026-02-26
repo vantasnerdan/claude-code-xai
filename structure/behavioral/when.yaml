@@ -109,3 +109,56 @@ tools:
     sequencing: >
       Read the notebook first to understand cell structure, then use
       NotebookEdit for targeted cell changes.
+
+  # --- Orchestration Tools ---
+  TaskCreate:
+    prerequisites: []
+    use_before:
+      - Task
+    use_instead_of: []
+    sequencing: >
+      Use TaskCreate first to plan and organize work items. Then use
+      the Task tool to actually execute each item. TaskCreate without
+      a subsequent Task call means no work gets done.
+
+  Task:
+    prerequisites:
+      - TaskCreate (optional, for tracking)
+    use_before:
+      - TaskUpdate (to record completion)
+    use_instead_of: []
+    sequencing: >
+      Structure the prompt with: task scope (one clear deliverable),
+      context (file paths, prior decisions), acceptance criteria (how to
+      verify completion), constraints (boundaries, what NOT to do), and
+      reminders (skills to read, conventions to follow). Launch independent
+      tasks in parallel with run_in_background: true.
+
+  TaskUpdate:
+    prerequisites:
+      - TaskCreate
+    use_before: []
+    use_instead_of: []
+    sequencing: >
+      Use after a Task subagent completes to record the outcome.
+      Or use to update status during long-running work.
+
+  TaskGet:
+    prerequisites:
+      - TaskCreate
+    use_before:
+      - TaskUpdate
+    use_instead_of: []
+    sequencing: >
+      Use to check task status before deciding next steps.
+      Combine with TaskList for a full picture of all tracked work.
+
+  TaskList:
+    prerequisites: []
+    use_before:
+      - Task
+      - TaskUpdate
+    use_instead_of: []
+    sequencing: >
+      Use at session start to review outstanding work, or after
+      completing a batch of tasks to verify all items are done.

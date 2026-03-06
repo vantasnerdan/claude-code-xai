@@ -6,6 +6,10 @@ chat.completion.chunk format used by Chat Completions.
 
 This adapter converts those events to Anthropic's streaming protocol:
 message_start, content_block_start/delta/stop, message_delta, message_stop.
+
+For multi-agent models using prompt-based tools, text deltas are buffered
+when a <tool_call> tag is detected. The buffer is flushed as a tool_use
+block when </tool_call> is found.
 """
 
 from __future__ import annotations
@@ -16,6 +20,7 @@ from typing import Any, AsyncIterator
 
 from translation.config import STOP_REASON_MAP
 from translation.reverse import unescape_text
+from translation.tool_parser import parse_tool_calls_from_text, has_pending_tool_call
 
 
 def _msg_start(model: str = "grok-4.20-multi-agent") -> dict[str, Any]:
@@ -56,8 +61,8 @@ def _close(
 class ResponsesStreamAdapter:
     """Async adapter: xAI Responses API SSE events -> Anthropic events.
 
-    Handles the semantic event types from the Responses API streaming
-    format and translates them to Anthropic's flat event stream.
+    Handles both API-native function calls and prompt-based tool calls
+    (detected via <tool_call> tags in text output).
     """
 
     def __init__(self, source: AsyncIterator[str]) -> None:
@@ -70,6 +75,10 @@ class ResponsesStreamAdapter:
         self._model = "grok-4.20-multi-agent"
         self._q: list[dict[str, Any]] = []
         self.usage: dict[str, int] = {}
+        # Buffer for prompt-based tool call detection in streaming.
+        self._text_buffer = ""
+        self._buffering = False
+        self._found_tool_calls = False
 
     def __aiter__(self) -> ResponsesStreamAdapter:
         return self
@@ -97,11 +106,7 @@ class ResponsesStreamAdapter:
                 if not line.strip():
                     continue
 
-                # Parse SSE: "event: <type>\ndata: <json>"
-                # Lines may come as "event: response.output_text.delta"
-                # followed by "data: {...}" or as just "data: {...}".
                 if line.startswith("event:"):
-                    # Event type line; the data line follows.
                     continue
                 if not line.startswith("data:"):
                     continue
@@ -149,18 +154,13 @@ class ResponsesStreamAdapter:
             if not self._started:
                 self._started = True
                 events.append(_msg_start(self._model))
-            if not self._text_block_open:
-                events.extend(self._open_text_block())
             text = data.get("delta", "")
             if text:
-                events.append({
-                    "type": "content_block_delta",
-                    "index": self._block_index,
-                    "delta": {"type": "text_delta", "text": unescape_text(text)},
-                })
+                events.extend(self._handle_text_delta(text))
 
         elif event_type == "response.output_text.done":
-            pass  # Text finalization; we already streamed deltas.
+            # Text finalization -- flush any remaining buffer.
+            events.extend(self._flush_text_buffer())
 
         elif event_type == "response.function_call_arguments.delta":
             if not self._started:
@@ -175,7 +175,7 @@ class ResponsesStreamAdapter:
                 })
 
         elif event_type == "response.function_call_arguments.done":
-            pass  # Full arguments; we already streamed deltas.
+            pass
 
         elif event_type == "response.output_item.done":
             events.extend(self._close_current_block())
@@ -186,24 +186,29 @@ class ResponsesStreamAdapter:
                 events.extend(self._open_text_block())
 
         elif event_type == "response.content_part.done":
-            pass  # Part finalized; block close handled by output_item.done.
+            pass
 
         elif event_type == "response.completed":
             response = data.get("response", {})
             usage = response.get("usage", {})
             self.usage = usage
+            events.extend(self._flush_text_buffer())
             events.extend(self._close_current_block())
             stop = self._infer_stop(response)
+            if self._found_tool_calls:
+                stop = "tool_use"
             events.extend(_close(stop, usage))
             self._done = True
 
         elif event_type == "response.incomplete":
+            events.extend(self._flush_text_buffer())
             events.extend(self._close_current_block())
             events.extend(_close("max_tokens"))
             self._done = True
 
         elif event_type == "response.failed":
             error = data.get("response", {}).get("error", {})
+            events.extend(self._flush_text_buffer())
             events.extend(self._close_current_block())
             events.append({
                 "type": "error",
@@ -214,7 +219,105 @@ class ResponsesStreamAdapter:
             })
             self._done = True
 
-        # Ignore reasoning events and unknown types silently.
+        return events
+
+    def _handle_text_delta(self, text: str) -> list[dict[str, Any]]:
+        """Handle a text delta, buffering when tool calls are detected.
+
+        Detects <tool_call> tags and buffers text until </tool_call> is
+        found, then emits proper tool_use blocks.
+        """
+        self._text_buffer += text
+        events: list[dict[str, Any]] = []
+
+        # Check if we have any completed tool call blocks to parse.
+        while "<tool_call>" in self._text_buffer and "</tool_call>" in self._text_buffer:
+            events.extend(self._parse_buffered_tool_calls())
+
+        # If we are in the middle of a tool call, keep buffering.
+        if has_pending_tool_call(self._text_buffer):
+            self._buffering = True
+            return events
+
+        # No pending tool call -- flush plain text.
+        if self._text_buffer and not self._buffering:
+            if not self._text_block_open:
+                events.extend(self._open_text_block())
+            events.append({
+                "type": "content_block_delta",
+                "index": self._block_index,
+                "delta": {"type": "text_delta", "text": unescape_text(self._text_buffer)},
+            })
+            self._text_buffer = ""
+
+        self._buffering = False
+        return events
+
+    def _parse_buffered_tool_calls(self) -> list[dict[str, Any]]:
+        """Parse completed <tool_call> blocks from the buffer.
+
+        Emits text before the tool call, then the tool_use block itself.
+        Updates the buffer to contain only remaining unparsed text.
+        """
+        events: list[dict[str, Any]] = []
+        content_blocks, tool_calls = parse_tool_calls_from_text(self._text_buffer)
+
+        for block in content_blocks:
+            if block["type"] == "text":
+                text = block.get("text", "")
+                if text:
+                    if not self._text_block_open:
+                        events.extend(self._open_text_block())
+                    events.append({
+                        "type": "content_block_delta",
+                        "index": self._block_index,
+                        "delta": {"type": "text_delta", "text": unescape_text(text)},
+                    })
+                    # Close text block before tool block.
+                    events.extend(self._close_current_block())
+            elif block["type"] == "tool_use":
+                self._found_tool_calls = True
+                events.extend(self._close_current_block())
+                self._tool_block_open = True
+                events.append({
+                    "type": "content_block_start",
+                    "index": self._block_index,
+                    "content_block": {
+                        "type": "tool_use",
+                        "id": block["id"],
+                        "name": block["name"],
+                        "input": {},
+                    },
+                })
+                # Send the full input as a single JSON delta.
+                input_json = json.dumps(block.get("input", {}))
+                events.append({
+                    "type": "content_block_delta",
+                    "index": self._block_index,
+                    "delta": {"type": "input_json_delta", "partial_json": input_json},
+                })
+                events.extend(self._close_current_block())
+
+        self._text_buffer = ""
+        return events
+
+    def _flush_text_buffer(self) -> list[dict[str, Any]]:
+        """Flush remaining text buffer as text content."""
+        if not self._text_buffer:
+            return []
+        events: list[dict[str, Any]] = []
+        # If there are tool calls in remaining buffer, parse them.
+        if "<tool_call>" in self._text_buffer:
+            events.extend(self._parse_buffered_tool_calls())
+        elif self._text_buffer.strip():
+            if not self._text_block_open:
+                events.extend(self._open_text_block())
+            events.append({
+                "type": "content_block_delta",
+                "index": self._block_index,
+                "delta": {"type": "text_delta", "text": unescape_text(self._text_buffer)},
+            })
+        self._text_buffer = ""
         return events
 
     def _open_text_block(self) -> list[dict[str, Any]]:
@@ -265,8 +368,10 @@ class ResponsesStreamAdapter:
         if not self._started:
             events.append(_msg_start(self._model))
             self._started = True
+        events.extend(self._flush_text_buffer())
         events.extend(self._close_current_block())
-        events.extend(_close("end_turn"))
+        stop = "tool_use" if self._found_tool_calls else "end_turn"
+        events.extend(_close(stop))
         self._done = True
         return events
 

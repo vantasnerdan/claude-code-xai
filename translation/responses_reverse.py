@@ -5,6 +5,9 @@ The output array contains items with 'type' field:
 - 'message' with content[{type: 'output_text', text: '...'}]
 - 'function_call' with {call_id, name, arguments}
 - 'reasoning' with optional encrypted_content (stripped)
+
+For multi-agent models using prompt-based tools, text responses may
+contain <tool_call> blocks that are parsed into tool_use content blocks.
 """
 
 from __future__ import annotations
@@ -15,6 +18,7 @@ from typing import Any
 
 from bridge.logging_config import get_logger
 from translation.reverse import unescape_text, _ERROR_SUGGESTIONS
+from translation.tool_parser import parse_tool_calls_from_text
 
 logger = get_logger("responses_reverse")
 
@@ -78,24 +82,36 @@ def translate_responses_response(
 
 
 def _build_content(output: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Build Anthropic content blocks from Responses API output array."""
+    """Build Anthropic content blocks from Responses API output array.
+
+    For multi-agent models, text output may contain <tool_call> blocks.
+    These are parsed into proper tool_use content blocks so Claude Code
+    can execute them.
+    """
     content: list[dict[str, Any]] = []
+    has_tool_calls = False
 
     for item in output:
         item_type = item.get("type", "")
 
         if item_type == "message":
-            # Message items contain a content array with output_text blocks.
             for sub in item.get("content", []):
                 sub_type = sub.get("type", "")
                 if sub_type == "output_text":
                     text = sub.get("text", "")
-                    content.append({
-                        "type": "text",
-                        "text": unescape_text(text),
-                    })
+                    text = unescape_text(text)
+                    # Check for prompt-based tool calls in text.
+                    if "<tool_call>" in text:
+                        blocks, tool_calls = parse_tool_calls_from_text(text)
+                        content.extend(blocks)
+                        if tool_calls:
+                            has_tool_calls = True
+                    else:
+                        content.append({"type": "text", "text": text})
 
         elif item_type == "function_call":
+            # API-native tool calls (non-multi-agent models).
+            has_tool_calls = True
             arguments = item.get("arguments", "{}")
             try:
                 args = json.loads(arguments) if isinstance(arguments, str) else arguments
@@ -109,7 +125,6 @@ def _build_content(output: list[dict[str, Any]]) -> list[dict[str, Any]]:
             })
 
         elif item_type == "reasoning":
-            # Reasoning blocks (encrypted or plain) are not passed to Claude Code.
             logger.debug("Skipping reasoning block in Responses output")
             continue
 
@@ -125,12 +140,19 @@ def _build_content(output: list[dict[str, Any]]) -> list[dict[str, Any]]:
 def _infer_stop_reason(output: list[dict[str, Any]]) -> str:
     """Infer the Anthropic stop_reason from Responses API output.
 
-    If the output contains function_call items, stop_reason is 'tool_use'.
-    Otherwise, it's 'end_turn'.
+    Checks for both API-native function_call items and prompt-based
+    <tool_call> blocks in text output.
     """
     for item in output:
         if item.get("type") == "function_call":
             return "tool_use"
+        # Check text content for prompt-based tool calls.
+        if item.get("type") == "message":
+            for sub in item.get("content", []):
+                if sub.get("type") == "output_text":
+                    text = sub.get("text", "")
+                    if "<tool_call>" in text and "</tool_call>" in text:
+                        return "tool_use"
     return "end_turn"
 
 

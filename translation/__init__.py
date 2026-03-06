@@ -1,14 +1,18 @@
-"""Bidirectional Anthropic <-> OpenAI protocol translation layer.
+"""Bidirectional Anthropic <-> xAI protocol translation layer.
 
 Converts Claude Code (Anthropic Messages API) traffic into xAI/Grok
-(OpenAI Chat Completions API) format and back. Custom translation with
-enrichment injection hooks at every boundary.
+format and back. Supports both Chat Completions and Responses API
+endpoints. Custom translation with enrichment injection hooks.
 """
 
 from translation.forward import anthropic_to_openai, translate_messages, translate_tools, strip_thinking
 from translation.reverse import openai_to_anthropic, translate_response, unescape_text
 from translation.streaming import translate_sse_event, OpenAIToAnthropicStreamAdapter
 from translation.config import TranslationConfig
+from translation.model_routing import detect_endpoint, XAIEndpoint
+from translation.responses_forward import anthropic_to_responses
+from translation.responses_reverse import responses_to_anthropic, translate_responses_response
+from translation.responses_streaming import ResponsesStreamAdapter
 
 __all__ = [
     "anthropic_to_openai",
@@ -21,4 +25,10 @@ __all__ = [
     "translate_sse_event",
     "OpenAIToAnthropicStreamAdapter",
     "TranslationConfig",
+    "detect_endpoint",
+    "XAIEndpoint",
+    "anthropic_to_responses",
+    "responses_to_anthropic",
+    "translate_responses_response",
+    "ResponsesStreamAdapter",
 ]

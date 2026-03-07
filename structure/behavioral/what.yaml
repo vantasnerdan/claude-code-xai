@@ -59,11 +59,15 @@ tools:
   Task: >
     Launches a REAL SUBAGENT that autonomously performs work. The subagent
     reads files, makes API calls, writes code, and posts comments. Use
-    run_in_background: true for non-blocking execution.
+    run_in_background: true for non-blocking execution. After completing
+    all work, the subagent MUST call TaskUpdate to mark any associated
+    tracking entry as completed with status 'completed' and a summary.
 
   TaskUpdate: >
     Updates the status or metadata of an existing tracking entry. Does not
-    perform any work. Does not launch a subagent.
+    perform any work. Does not launch a subagent. MUST be called by
+    subagents after completing their delegated work to close the task
+    lifecycle.
 
   TaskGet: >
     Reads a single tracking entry by ID. Returns task metadata, status,

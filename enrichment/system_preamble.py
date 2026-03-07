@@ -163,6 +163,12 @@ Critical distinction: planning tools and execution tools are SEPARATE steps.
 1. TaskCreate to plan and track (optional, for organization)
 2. Task tool to execute (required, for actual work)
 3. Planning is NOT doing. Creating a tracking entry does NOT launch work.
+4. After completing work, ALWAYS call TaskUpdate with status: 'completed' \
+and a summary of what was done. A task is NOT complete until TaskUpdate closes it.
+
+**Task lifecycle closure is mandatory.** Subagents that finish work without \
+calling TaskUpdate leave orphaned entries that pollute the task list and \
+force manual cleanup. Every subagent must close its own tasks.
 
 A vague delegation ("review this") produces vague results. \
 A structured delegation with scope, context, and criteria produces focused, \

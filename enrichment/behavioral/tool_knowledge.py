@@ -312,18 +312,24 @@ TOOL_KNOWLEDGE: dict[str, dict[str, Any]] = {
         "what": (
             "Launches a REAL SUBAGENT that autonomously performs work. The subagent "
             "reads files, makes API calls, writes code, and posts comments. Use "
-            "run_in_background: true for non-blocking execution."
+            "run_in_background: true for non-blocking execution. After completing "
+            "all work, the subagent MUST call TaskUpdate to mark any associated "
+            "tracking entry as completed with status: 'completed' and a summary of "
+            "what was done."
         ),
         "why": {
             "problem_context": (
                 "This is the execution tool — the only way to delegate actual work "
                 "to a subagent. Unlike TaskCreate (which only creates a tracking entry), "
-                "the Task tool starts an autonomous agent that performs real operations."
+                "the Task tool starts an autonomous agent that performs real operations. "
+                "The full lifecycle is: TaskCreate (plan) -> Task (execute) -> TaskUpdate "
+                "(mark completed). A task left without TaskUpdate pollutes the task list."
             ),
             "failure_modes": [
                 "Using TaskCreate instead of Task — TaskCreate only creates a tracking entry, no work happens",
                 "Vague prompts produce vague results — always include scope, context, acceptance criteria, and constraints",
                 "Forgetting run_in_background: true causes the orchestrator to block until the subagent finishes",
+                "Completing work without calling TaskUpdate — leaves orphaned pending tasks that require manual cleanup",
             ],
         },
         "when": {
@@ -335,22 +341,28 @@ TOOL_KNOWLEDGE: dict[str, dict[str, Any]] = {
                 "context (file paths, prior decisions), acceptance criteria (how to "
                 "verify completion), constraints (boundaries, what NOT to do), and "
                 "reminders (skills to read, conventions to follow). Launch independent "
-                "tasks in parallel with run_in_background: true."
+                "tasks in parallel with run_in_background: true. Before finishing, "
+                "ALWAYS call TaskUpdate with status: 'completed' and include evidence "
+                "of what was accomplished."
             ),
         },
     },
     "TaskUpdate": {
         "what": (
             "Updates the status or metadata of an existing tracking entry. Does not "
-            "perform any work. Does not launch a subagent."
+            "perform any work. Does not launch a subagent. MUST be called by subagents "
+            "after completing their delegated work to mark the task as completed."
         ),
         "why": {
             "problem_context": (
                 "Tracking management — mark tasks as complete, update status, or "
-                "add notes. This is bookkeeping, not execution."
+                "add notes. This is bookkeeping, not execution. Every subagent that "
+                "receives a task_id in its delegation prompt must call TaskUpdate "
+                "with status: 'completed' before finishing."
             ),
             "failure_modes": [
                 "Expecting TaskUpdate to trigger work — it only updates the tracking record",
+                "Subagent finishes work without calling TaskUpdate — leaves orphaned pending tasks in the task list",
             ],
         },
         "when": {
@@ -358,8 +370,9 @@ TOOL_KNOWLEDGE: dict[str, dict[str, Any]] = {
             "use_before": [],
             "use_instead_of": [],
             "sequencing": (
-                "Use after a Task subagent completes to record the outcome. "
-                "Or use to update status during long-running work."
+                "MUST be called at the end of every subagent's work to close the "
+                "task lifecycle. Include a summary of what was done and any evidence "
+                "of completion (test results, file paths modified, etc.)."
             ),
         },
     },

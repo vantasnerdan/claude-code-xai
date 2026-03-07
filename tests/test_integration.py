@@ -101,7 +101,11 @@ class TestEnrichmentIntegration:
         assert tools == original
 
     def test_translation_after_enrichment_preserves_core_fields(self):
-        """Core fields (name, description, parameters) survive enrichment + translation."""
+        """Core fields (name, description, parameters) survive enrichment + translation.
+
+        The description now includes folded enrichment metadata appended
+        after the original description text (fix for Issue #35).
+        """
         enricher = create_enricher(mode="full")
         set_tool_enrichment_hook(enricher.enrich)
 
@@ -112,7 +116,11 @@ class TestEnrichmentIntegration:
 
         func = result[0]["function"]
         assert func["name"] == "Bash"
-        assert func["description"] == "Executes commands"
+        # Original description is preserved at the start, with enrichment
+        # metadata appended after it (Issue #35 fix).
+        assert func["description"].startswith("Executes commands")
+        # Enrichment data is now folded into the description
+        assert len(func["description"]) > len("Executes commands")
         assert func["parameters"]["required"] == ["command"]
 
     def test_multiple_tools_all_enriched(self):

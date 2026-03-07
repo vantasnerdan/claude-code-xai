@@ -13,6 +13,10 @@ from typing import Any, Callable
 
 from bridge.logging_config import get_logger
 from bridge.token_logger import measure_enrichment_overhead
+from translation.enrichment_folding import (
+    fold_enrichment_into_description,
+    _remove_remaining_enrichment_fields,
+)
 
 logger = get_logger("forward")
 
@@ -90,8 +94,14 @@ def translate_tools(
             anthropic_tools, tools,
         )
 
+    # Fold enrichment metadata into descriptions so the guest model
+    # actually receives the data. The OpenAI function format only
+    # carries name/description/parameters — everything else is dropped.
+    fold_enrichment_into_description(tools)
+
     result: list[dict[str, Any]] = []
     for tool in tools:
+        _remove_remaining_enrichment_fields(tool)
         openai_tool: dict[str, Any] = {
             "type": "function",
             "function": {

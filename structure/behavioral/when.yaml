@@ -132,7 +132,9 @@ tools:
       context (file paths, prior decisions), acceptance criteria (how to
       verify completion), constraints (boundaries, what NOT to do), and
       reminders (skills to read, conventions to follow). Launch independent
-      tasks in parallel with run_in_background: true.
+      tasks in parallel with run_in_background: true. Before finishing,
+      ALWAYS call TaskUpdate with status completed and include evidence
+      of what was accomplished.
 
   TaskUpdate:
     prerequisites:
@@ -140,8 +142,9 @@ tools:
     use_before: []
     use_instead_of: []
     sequencing: >
-      Use after a Task subagent completes to record the outcome.
-      Or use to update status during long-running work.
+      MUST be called at the end of every subagent work session to close
+      the task lifecycle. Include a summary of what was done and any
+      evidence of completion (test results, file paths modified, etc.).
 
   TaskGet:
     prerequisites:

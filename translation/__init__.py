@@ -12,9 +12,11 @@ from translation.reverse import openai_to_anthropic, translate_response, unescap
 from translation.streaming import translate_sse_event, OpenAIToAnthropicStreamAdapter
 from translation.config import TranslationConfig
 from translation.model_routing import detect_endpoint, XAIEndpoint
+from translation.shared import flatten_system
 from translation.responses_forward import anthropic_to_responses
 from translation.responses_reverse import responses_to_anthropic, translate_responses_response
 from translation.responses_streaming import ResponsesStreamAdapter
+from translation.tools import enrich_tools, translate_tools_responses
 
 __all__ = [
     "anthropic_to_openai",
@@ -29,8 +31,11 @@ __all__ = [
     "TranslationConfig",
     "detect_endpoint",
     "XAIEndpoint",
+    "flatten_system",
     "anthropic_to_responses",
     "responses_to_anthropic",
     "translate_responses_response",
     "ResponsesStreamAdapter",
+    "enrich_tools",
+    "translate_tools_responses",
 ]

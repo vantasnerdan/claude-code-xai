@@ -15,6 +15,7 @@ from typing import Any
 
 from bridge.logging_config import get_logger
 from translation.config import TranslationConfig, UNSUPPORTED_FEATURES, STRIPPED_FEATURES
+from translation.shared import flatten_system as _flatten_system
 from translation.tools import translate_tools as _translate_tools
 from enrichment.system_preamble import strip_anthropic_identity
 
@@ -67,29 +68,6 @@ def strip_thinking(request: dict[str, Any]) -> list[str]:
                     )
 
     return warnings
-
-
-def _flatten_system(system: str | list[dict[str, Any]]) -> str:
-    """Flatten a system prompt to a single string.
-
-    Handles both Anthropic system prompt formats:
-    - String: returned as-is
-    - List of content blocks: text blocks are joined with newlines,
-      non-text blocks are skipped
-    """
-    if isinstance(system, str):
-        return system
-    if isinstance(system, list):
-        parts: list[str] = []
-        for block in system:
-            if isinstance(block, dict) and block.get("type") == "text":
-                text = block.get("text", "")
-                if text:
-                    parts.append(text)
-        return "\n\n".join(parts)
-    raise TypeError(
-        f"Expected str or list for system field, got {type(system).__name__}"
-    )
 
 
 def anthropic_to_openai(request: dict[str, Any]) -> dict[str, Any]:

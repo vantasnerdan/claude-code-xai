@@ -17,7 +17,8 @@ from typing import Any
 
 from bridge.logging_config import get_logger
 from translation.config import TranslationConfig, UNSUPPORTED_FEATURES
-from translation.tools import translate_tools as _translate_tools_chat
+from translation.shared import flatten_system
+from translation.tools import translate_tools_responses as _translate_tools_responses
 from enrichment.system_preamble import strip_anthropic_identity
 
 _config = TranslationConfig()
@@ -48,7 +49,7 @@ def anthropic_to_responses(request: dict[str, Any]) -> dict[str, Any]:
     # System prompt -> first message with role 'system' in input array.
     raw_system = request.get("system", "")
     stripped = strip_anthropic_identity(raw_system)
-    system = _flatten_system(stripped)
+    system = flatten_system(stripped)
     preamble = _config.system_prompt_preamble
     if preamble and system:
         system = f"{preamble}\n\n{system}"
@@ -66,60 +67,12 @@ def anthropic_to_responses(request: dict[str, Any]) -> dict[str, Any]:
         "stream": bool(request.get("stream")),
     }
 
-    # Translate tools to Responses API format.
+    # Translate tools to Responses API format (enrichment runs inside).
     tools = request.get("tools")
     if tools:
         result["tools"] = _translate_tools_responses(tools)
 
     return result
-
-
-def _flatten_system(system: str | list[dict[str, Any]]) -> str:
-    """Flatten a system prompt to a single string.
-
-    Handles both Anthropic formats: plain string or list of content blocks.
-    """
-    if isinstance(system, str):
-        return system
-    if isinstance(system, list):
-        parts: list[str] = []
-        for block in system:
-            if isinstance(block, dict) and block.get("type") == "text":
-                text = block.get("text", "")
-                if text:
-                    parts.append(text)
-        return "\n\n".join(parts)
-    raise TypeError(
-        f"Expected str or list for system field, got {type(system).__name__}"
-    )
-
-
-def _translate_tools_responses(
-    anthropic_tools: list[dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Translate Anthropic tools to Responses API format.
-
-    Responses API tools have a flatter structure:
-    {type: "function", name: "...", description: "...", parameters: {...}}
-
-    Unlike Chat Completions which nests under 'function' key.
-    Enrichment hooks still run at the Anthropic level via _translate_tools_chat.
-    """
-    # Run enrichment hook at Anthropic level (via the chat tools module).
-    # This calls the enrichment hook and measures overhead.
-    chat_tools = _translate_tools_chat(anthropic_tools)
-
-    # Convert from Chat Completions format to Responses API format.
-    responses_tools: list[dict[str, Any]] = []
-    for ct in chat_tools:
-        func = ct.get("function", {})
-        responses_tools.append({
-            "type": "function",
-            "name": func.get("name", ""),
-            "description": func.get("description", ""),
-            "parameters": func.get("parameters", {}),
-        })
-    return responses_tools
 
 
 def _translate_messages(

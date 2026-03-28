@@ -11,8 +11,8 @@ from translation.responses_forward import (
     anthropic_to_responses,
     _translate_messages,
     _extract_tool_result,
-    _translate_tools_responses,
 )
+from translation.tools import translate_tools_responses as _translate_tools_responses
 
 
 class TestAnthropicToResponses:
@@ -211,7 +211,7 @@ class TestExtractToolResult:
 
 
 class TestTranslateToolsResponses:
-    """Tests for tool definition translation."""
+    """Tests for tool definition translation to Responses API format."""
 
     def test_flat_structure(self):
         anthropic_tools = [

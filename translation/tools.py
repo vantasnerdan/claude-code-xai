@@ -1,7 +1,11 @@
-"""Tool definition translation between Anthropic and OpenAI formats.
+"""Tool definition translation between Anthropic and xAI formats.
 
-Forward: Anthropic {name, description, input_schema} ->
-         OpenAI {type: "function", function: {name, description, parameters}}
+Two output formats:
+- Chat Completions: {type: "function", function: {name, description, parameters}}
+- Responses API: {type: "function", name: ..., description: ..., parameters: ...}
+
+Both share the same enrichment pipeline (hook + folding + cleanup).
+The core enrichment runs once; formatting is the final step.
 
 Enrichment injection point: hook to modify tool definitions before translation.
 Measures enrichment overhead for token logging (Issue #26).
@@ -29,7 +33,7 @@ ToolEnrichmentHook = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
 _tool_enrichment_hook: ToolEnrichmentHook | None = None
 
 # Last measured enrichment overhead in estimated tokens.
-# Updated on every translate_tools() call where enrichment runs.
+# Updated on every enrich_tools() call where enrichment runs.
 # Read by main.py to include in token usage logging.
 _last_enrichment_overhead: int = 0
 
@@ -46,10 +50,10 @@ def set_tool_enrichment_hook(hook: ToolEnrichmentHook | None) -> None:
 
 
 def get_last_enrichment_overhead() -> int:
-    """Return the enrichment overhead from the most recent translate_tools() call.
+    """Return the enrichment overhead from the most recent enrich_tools() call.
 
     Returns estimated token count added by enrichment. Resets to 0 on
-    each translate_tools() call before measurement.
+    each enrich_tools() call before measurement.
     """
     return _last_enrichment_overhead
 
@@ -65,16 +69,21 @@ def reset_enrichment_overhead() -> None:
     _last_enrichment_overhead = 0
 
 
-def translate_tools(
+def enrich_tools(
     anthropic_tools: list[dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Translate Anthropic tool definitions to OpenAI function format.
+    """Run enrichment pipeline on Anthropic tool definitions.
+
+    This is the shared core: enrichment hook + description folding +
+    cleanup of enrichment-only fields. The result is a list of dicts
+    with {name, description, input_schema} -- format-neutral, ready
+    for either Chat Completions or Responses API formatting.
 
     Args:
         anthropic_tools: List of Anthropic tool defs with input_schema.
 
     Returns:
-        List of OpenAI function tool defs with parameters.
+        Enriched tool defs (name, description, input_schema only).
     """
     global _last_enrichment_overhead
     _last_enrichment_overhead = 0
@@ -95,13 +104,33 @@ def translate_tools(
         )
 
     # Fold enrichment metadata into descriptions so the guest model
-    # actually receives the data. The OpenAI function format only
-    # carries name/description/parameters — everything else is dropped.
+    # actually receives the data. Both xAI formats only carry
+    # name/description/parameters -- everything else is dropped.
     fold_enrichment_into_description(tools)
 
-    result: list[dict[str, Any]] = []
     for tool in tools:
         _remove_remaining_enrichment_fields(tool)
+
+    return tools
+
+
+def translate_tools(
+    anthropic_tools: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Translate Anthropic tool definitions to OpenAI Chat Completions format.
+
+    Chat Completions format: {type: "function", function: {name, description, parameters}}
+
+    Args:
+        anthropic_tools: List of Anthropic tool defs with input_schema.
+
+    Returns:
+        List of OpenAI function tool defs with parameters.
+    """
+    enriched = enrich_tools(anthropic_tools)
+
+    result: list[dict[str, Any]] = []
+    for tool in enriched:
         openai_tool: dict[str, Any] = {
             "type": "function",
             "function": {
@@ -111,5 +140,33 @@ def translate_tools(
             },
         }
         result.append(openai_tool)
+
+    return result
+
+
+def translate_tools_responses(
+    anthropic_tools: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Translate Anthropic tool definitions to xAI Responses API format.
+
+    Responses API format: {type: "function", name: ..., description: ..., parameters: ...}
+    Flat structure -- no nested 'function' key.
+
+    Args:
+        anthropic_tools: List of Anthropic tool defs with input_schema.
+
+    Returns:
+        List of Responses API function tool defs.
+    """
+    enriched = enrich_tools(anthropic_tools)
+
+    result: list[dict[str, Any]] = []
+    for tool in enriched:
+        result.append({
+            "type": "function",
+            "name": tool["name"],
+            "description": tool.get("description", ""),
+            "parameters": tool.get("input_schema", {}),
+        })
 
     return result

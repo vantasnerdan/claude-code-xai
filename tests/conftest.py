@@ -166,10 +166,36 @@ def anthropic_simple_request() -> dict[str, Any]:
 
 
 @pytest.fixture
-def openai_simple_response() -> dict[str, Any]:
-    """A basic OpenAI Chat Completions response.
+def responses_api_simple_response() -> dict[str, Any]:
+    """A basic xAI Responses API response.
 
-    Standard non-streaming response with a single choice and usage stats.
+    Standard non-streaming response with output array and usage stats.
+    This is the PRIMARY format since issue #51.
+    """
+    return {
+        "id": "resp_test123",
+        "output": [
+            {
+                "type": "message",
+                "content": [
+                    {"type": "output_text", "text": "I'm doing well, thank you! How can I help you?"},
+                ],
+            }
+        ],
+        "model": "grok-4-1-fast-reasoning",
+        "usage": {
+            "input_tokens": 15,
+            "output_tokens": 12,
+        },
+    }
+
+
+@pytest.fixture
+def openai_simple_response() -> dict[str, Any]:
+    """LEGACY: OpenAI Chat Completions response format.
+
+    Retained for testing the legacy translation.reverse module.
+    The primary path now uses Responses API format (see responses_api_simple_response).
     """
     return {
         "id": "chatcmpl-test123",

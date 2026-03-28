@@ -63,7 +63,7 @@ def reset_enrichment_overhead() -> None:
 
     Call at the start of each request to prevent stale values from
     a previous request leaking into the current one when no tools
-    are present (translate_tools is not called for tool-free requests).
+    are present (enrich_tools is not called for tool-free requests).
     """
     global _last_enrichment_overhead
     _last_enrichment_overhead = 0

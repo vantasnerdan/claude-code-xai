@@ -7,8 +7,8 @@ text with literal \\n instead of actual newline characters.
 
 Coverage:
 1. unescape_text() function directly
-2. Non-streaming reverse translation (_build_content)
-3. Streaming translation (adapter and stateless)
+2. Non-streaming reverse translation -- LEGACY (CC) and PRIMARY (Responses API)
+3. Streaming translation -- LEGACY (CC adapter) and PRIMARY (Responses adapter)
 4. Tool call arguments are NOT unescaped (structured data)
 5. E2E round trip through JSONResponse
 """
@@ -170,12 +170,12 @@ class TestUnescapeText:
 
 
 # ---------------------------------------------------------------------------
-# Non-streaming reverse translation
+# LEGACY: Non-streaming reverse translation (Chat Completions)
 # ---------------------------------------------------------------------------
 
 
 class TestNonStreamingNewlines:
-    """Multiline content through the non-streaming reverse translator."""
+    """LEGACY: Multiline content through the CC non-streaming reverse translator."""
 
     def test_literal_newlines_in_response_unescaped(self) -> None:
         """Literal \\n in Grok response text becomes real newlines."""
@@ -273,12 +273,84 @@ class TestNonStreamingNewlines:
 
 
 # ---------------------------------------------------------------------------
-# Streaming translation
+# PRIMARY: Non-streaming reverse translation (Responses API)
+# ---------------------------------------------------------------------------
+
+
+class TestResponsesApiNonStreamingNewlines:
+    """PRIMARY: Multiline content through the Responses API reverse translator."""
+
+    def test_literal_newlines_in_response_unescaped(self) -> None:
+        """Literal \\n in Responses API output text becomes real newlines."""
+        from translation.responses_reverse import responses_to_anthropic
+        response = {
+            "id": "resp_nl",
+            "output": [
+                {"type": "message", "content": [{"type": "output_text", "text": "Step 1\\nStep 2\\nStep 3"}]},
+            ],
+            "model": "grok-4-1-fast-reasoning",
+            "usage": {},
+        }
+        result = responses_to_anthropic(response)
+        text = result["content"][0]["text"]
+        assert text == "Step 1\nStep 2\nStep 3"
+        assert text.count("\n") == 2
+
+    def test_real_newlines_preserved(self) -> None:
+        """Real newlines in Responses API output pass through correctly."""
+        from translation.responses_reverse import responses_to_anthropic
+        response = {
+            "id": "resp_nl2",
+            "output": [
+                {"type": "message", "content": [{"type": "output_text", "text": "Step 1\nStep 2\nStep 3"}]},
+            ],
+            "model": "grok-4-1-fast-reasoning",
+            "usage": {},
+        }
+        result = responses_to_anthropic(response)
+        text = result["content"][0]["text"]
+        assert text == "Step 1\nStep 2\nStep 3"
+
+    def test_multiline_plan_e2e(self) -> None:
+        """Full plan with multiple paragraphs through Responses API."""
+        from translation.responses_reverse import responses_to_anthropic
+        plan = (
+            "## Implementation Plan\\n"
+            "\\n"
+            "### Phase 1: Research\\n"
+            "- Read existing code\\n"
+            "- Identify dependencies\\n"
+            "\\n"
+            "### Phase 2: Implementation\\n"
+            "- Create new module\\n"
+            "- Write tests\\n"
+            "\\n"
+            "### Phase 3: Review\\n"
+            "- Run test suite\\n"
+            "- Create PR"
+        )
+        response = {
+            "id": "resp_plan",
+            "output": [
+                {"type": "message", "content": [{"type": "output_text", "text": plan}]},
+            ],
+            "model": "grok-4-1-fast-reasoning",
+            "usage": {},
+        }
+        result = responses_to_anthropic(response)
+        text = result["content"][0]["text"]
+        assert "## Implementation Plan\n" in text
+        assert "### Phase 1: Research\n" in text
+        assert text.count("\n") == 12
+
+
+# ---------------------------------------------------------------------------
+# LEGACY: Streaming translation (Chat Completions)
 # ---------------------------------------------------------------------------
 
 
 class TestStreamingNewlines:
-    """Multiline content through the streaming translator."""
+    """LEGACY: Multiline content through the CC streaming translator."""
 
     def test_stateless_literal_newline_unescaped(self) -> None:
         """translate_sse_event unescapes literal \\n in text deltas."""

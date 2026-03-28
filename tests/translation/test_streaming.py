@@ -1,8 +1,11 @@
-"""Tests for streaming translation: OpenAI SSE chunks <-> Anthropic SSE events.
+"""LEGACY: Tests for streaming translation: OpenAI SSE chunks <-> Anthropic SSE events.
 
-These tests define the contract for the `translation.streaming` module.
-The streaming translator must convert OpenAI's delta-based streaming format
-into Anthropic's typed event stream (message_start, content_block_delta, etc.).
+These tests define the contract for the `translation.streaming` module,
+which handles the LEGACY Chat Completions streaming format
+(XAI_USE_CHAT_COMPLETIONS=true).
+
+The PRIMARY streaming path is `translation.responses_streaming`,
+tested in `test_responses_streaming.py`.
 
 This is the hardest part of the translation layer because:
 1. State must be maintained across chunks (partial tool call arguments)

@@ -1,9 +1,13 @@
-"""Tests for round-trip translation fidelity.
+"""LEGACY: Tests for round-trip translation fidelity via Chat Completions path.
 
-These tests verify that translating forward (Anthropic -> OpenAI) and then
-reverse (OpenAI -> Anthropic) preserves critical information. Perfect
+These tests verify that translating forward (Anthropic -> OpenAI CC) and then
+reverse (OpenAI CC -> Anthropic) preserves critical information. Perfect
 round-trip fidelity is not expected (some fields are format-specific),
 but tool IDs, content, and structural relationships must survive.
+
+This tests the LEGACY Chat Completions round trip. For the PRIMARY
+Responses API round trip, see test_responses_forward.py and
+test_responses_reverse.py.
 """
 
 import json

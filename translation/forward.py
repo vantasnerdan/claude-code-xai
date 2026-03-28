@@ -1,5 +1,9 @@
 """Forward translation: Anthropic Messages API -> OpenAI Chat Completions API.
 
+LEGACY PATH: As of issue #51, the Responses API (responses_forward.py) is
+the default. This module is retained for the Chat Completions fallback,
+activated via XAI_USE_CHAT_COMPLETIONS=true.
+
 Handles system prompt extraction, content block flattening, tool_use
 to tool_calls, and tool_result to tool role messages.
 """

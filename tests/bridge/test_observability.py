@@ -3,6 +3,9 @@
 Verifies that INFO and DEBUG log messages are emitted at each
 pipeline stage: request intake, enrichment, outgoing payload,
 and response summary.
+
+As of issue #51, the default API path is the Responses API.
+Mock responses use Responses API format.
 """
 
 from __future__ import annotations
@@ -37,14 +40,15 @@ def _mock_xai_response(data: dict, status_code: int = 200):
 
 
 _SIMPLE_XAI_RESPONSE = {
-    "id": "chatcmpl-log1",
-    "object": "chat.completion",
-    "choices": [{
-        "index": 0,
-        "message": {"role": "assistant", "content": "Hi there!"},
-        "finish_reason": "stop",
-    }],
-    "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
+    "id": "resp_log1",
+    "output": [
+        {
+            "type": "message",
+            "content": [{"type": "output_text", "text": "Hi there!"}],
+        }
+    ],
+    "model": "grok-4-1-fast-reasoning",
+    "usage": {"input_tokens": 10, "output_tokens": 5},
 }
 
 
@@ -80,7 +84,7 @@ class TestPoint2RequestLogging:
                     "messages": [{"role": "user", "content": "Hello"}],
                 })
         debug_msgs = [r.message for r in caplog.records if r.levelno == logging.DEBUG]
-        assert any("Translated request" in m for m in debug_msgs)
+        assert any("Translated" in m for m in debug_msgs)
 
     def test_request_log_includes_tool_count(
         self, client: TestClient, caplog: pytest.LogCaptureFixture,
@@ -116,32 +120,27 @@ class TestPoint3ResponseLogging:
                     "max_tokens": 1024,
                     "messages": [{"role": "user", "content": "Hello"}],
                 })
-        resp_logs = [r.message for r in caplog.records if "xAI response" in r.message]
+        # Responses handler logs "xAI Responses in ..."
+        resp_logs = [r.message for r in caplog.records if "xAI Responses" in r.message]
         assert len(resp_logs) >= 1
         msg = resp_logs[0]
         assert "status=200" in msg
-        assert "stop=stop" in msg
-        assert "tokens=10/5/15" in msg
 
-    def test_info_logs_tool_calls_count(
+    def test_info_logs_output_types(
         self, client: TestClient, caplog: pytest.LogCaptureFixture,
     ) -> None:
         tool_response = {
-            "id": "chatcmpl-tools1",
-            "object": "chat.completion",
-            "choices": [{
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {"id": "call_1", "type": "function",
-                         "function": {"name": "Read", "arguments": "{}"}},
-                    ],
+            "id": "resp_tools1",
+            "output": [
+                {
+                    "type": "function_call",
+                    "call_id": "call_1",
+                    "name": "Read",
+                    "arguments": "{}",
                 },
-                "finish_reason": "tool_calls",
-            }],
-            "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
+            ],
+            "model": "grok-4-1-fast-reasoning",
+            "usage": {"input_tokens": 20, "output_tokens": 10},
         }
         mock_post, _ = _mock_xai_response(tool_response)
         import main
@@ -152,8 +151,8 @@ class TestPoint3ResponseLogging:
                     "max_tokens": 1024,
                     "messages": [{"role": "user", "content": "Read file"}],
                 })
-        resp_logs = [r.message for r in caplog.records if "xAI response" in r.message]
-        assert any("tool_calls=1" in m for m in resp_logs)
+        resp_logs = [r.message for r in caplog.records if "xAI Responses" in r.message]
+        assert any("function_call" in m for m in resp_logs)
 
     def test_debug_logs_full_response_body(
         self, client: TestClient, caplog: pytest.LogCaptureFixture,
@@ -168,7 +167,7 @@ class TestPoint3ResponseLogging:
                     "messages": [{"role": "user", "content": "Hello"}],
                 })
         debug_msgs = [r.message for r in caplog.records if r.levelno == logging.DEBUG]
-        assert any("xAI response body" in m for m in debug_msgs)
+        assert any("xAI Responses body" in m for m in debug_msgs)
 
 
 class TestPoint1EnrichmentLogging:

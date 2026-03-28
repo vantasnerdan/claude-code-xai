@@ -1,5 +1,6 @@
 """Streaming SSE: xAI Responses API event stream -> Anthropic event stream.
 
+As of issue #51, this is the PRIMARY streaming adapter for all models.
 The Responses API uses semantic events (response.output_text.delta,
 response.function_call_arguments.delta, etc.) instead of the flat
 chat.completion.chunk format used by Chat Completions.
@@ -18,7 +19,7 @@ from translation.config import STOP_REASON_MAP
 from translation.reverse import unescape_text
 
 
-def _msg_start(model: str = "grok-4.20-multi-agent") -> dict[str, Any]:
+def _msg_start(model: str = "grok-4-1-fast-reasoning") -> dict[str, Any]:
     """Emit the Anthropic message_start event."""
     return {
         "type": "message_start",
@@ -67,7 +68,7 @@ class ResponsesStreamAdapter:
         self._text_block_open = False
         self._tool_block_open = False
         self._block_index = 0
-        self._model = "grok-4.20-multi-agent"
+        self._model = "grok-4-1-fast-reasoning"
         self._q: list[dict[str, Any]] = []
         self.usage: dict[str, int] = {}
 

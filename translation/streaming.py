@@ -1,4 +1,9 @@
-"""Streaming SSE: OpenAI delta stream -> Anthropic event stream."""
+"""Streaming SSE: OpenAI delta stream -> Anthropic event stream.
+
+LEGACY PATH: As of issue #51, the Responses API (responses_streaming.py)
+is the default streaming adapter. This module is retained for the Chat
+Completions fallback, activated via XAI_USE_CHAT_COMPLETIONS=true.
+"""
 from __future__ import annotations
 import json, uuid
 from typing import Any, AsyncIterator

@@ -3,6 +3,9 @@
 Tests bridge startup, endpoint responses, enrichment mode toggling,
 error handling, and request translation — all without requiring a live
 xAI API key.
+
+As of issue #51, the default API path is the Responses API. Mock
+responses use Responses API format (output array, function_call items).
 """
 
 from __future__ import annotations
@@ -33,6 +36,41 @@ def _mock_xai_response(data: dict, status_code: int = 200):
         return mock_resp
 
     return mock_post, mock_resp
+
+
+def _responses_api_text(text: str, model: str = "grok-4-1-fast-reasoning") -> dict:
+    """Standard Responses API text response."""
+    return {
+        "id": "resp_test123",
+        "output": [
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": text}],
+            }
+        ],
+        "model": model,
+        "usage": {"input_tokens": 10, "output_tokens": 5},
+    }
+
+
+def _responses_api_tool_call(
+    name: str, arguments: dict, call_id: str = "call_abc123",
+    model: str = "grok-4-1-fast-reasoning",
+) -> dict:
+    """Standard Responses API function call response."""
+    return {
+        "id": "resp_test456",
+        "output": [
+            {
+                "type": "function_call",
+                "call_id": call_id,
+                "name": name,
+                "arguments": json.dumps(arguments),
+            }
+        ],
+        "model": model,
+        "usage": {"input_tokens": 20, "output_tokens": 15},
+    }
 
 
 class TestBridgeStartup:
@@ -78,16 +116,7 @@ class TestErrorHandling:
 
     def test_thinking_feature_stripped_not_rejected(self, client: TestClient) -> None:
         """Thinking param is gracefully stripped, not rejected with 400."""
-        mock_post, _ = _mock_xai_response({
-            "id": "chatcmpl-think1",
-            "object": "chat.completion",
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": "Hello!"},
-                "finish_reason": "stop",
-            }],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-        })
+        mock_post, _ = _mock_xai_response(_responses_api_text("Hello!"))
 
         import main
         with patch.object(main.client, "post", side_effect=mock_post):
@@ -123,17 +152,8 @@ class TestRequestTranslation:
     """Verify requests are correctly translated before reaching xAI."""
 
     def test_simple_text_round_trip(self, client: TestClient) -> None:
-        """Mock xAI and verify full Anthropic → OpenAI → Anthropic translation."""
-        mock_post, mock_resp = _mock_xai_response({
-            "id": "chatcmpl-123",
-            "object": "chat.completion",
-            "choices": [{
-                "index": 0,
-                "message": {"role": "assistant", "content": "Hello!"},
-                "finish_reason": "stop",
-            }],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15},
-        })
+        """Mock xAI and verify full Anthropic -> Responses API -> Anthropic translation."""
+        mock_post, mock_resp = _mock_xai_response(_responses_api_text("Hello!"))
 
         import main
         with patch.object(main.client, "post", side_effect=mock_post):
@@ -156,24 +176,15 @@ class TestRequestTranslation:
             assert data["stop_reason"] == "end_turn"
             assert "usage" in data
 
-    def test_tool_definitions_reach_xai_enriched(self, client: TestClient) -> None:
-        """Verify tools are enriched and translated to OpenAI format."""
+    def test_tool_definitions_reach_xai_in_responses_format(self, client: TestClient) -> None:
+        """Verify tools are enriched and translated to Responses API format."""
         captured_request = {}
 
         async def capture_post(*args, **kwargs):
             captured_request.update(kwargs.get("json", {}))
             mock_resp = MagicMock()
             mock_resp.status_code = 200
-            mock_resp.json.return_value = {
-                "id": "chatcmpl-456",
-                "object": "chat.completion",
-                "choices": [{
-                    "index": 0,
-                    "message": {"role": "assistant", "content": "I'll read that file."},
-                    "finish_reason": "stop",
-                }],
-                "usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30},
-            }
+            mock_resp.json.return_value = _responses_api_text("I'll read that file.")
             return mock_resp
 
         import main
@@ -195,36 +206,20 @@ class TestRequestTranslation:
 
             assert resp.status_code == 200
 
-            # Verify OpenAI format tools were sent
+            # Verify Responses API format tools were sent (flat, not nested in 'function')
             assert captured_request["tools"] is not None
             assert len(captured_request["tools"]) == 1
             tool = captured_request["tools"][0]
             assert tool["type"] == "function"
-            assert tool["function"]["name"] == "Read"
+            assert tool["name"] == "Read"
+            # Responses API tools have name at top level, not nested in 'function'
+            assert "function" not in tool
 
     def test_tool_use_response_translated(self, client: TestClient) -> None:
-        """Verify tool_calls from Grok become Anthropic tool_use blocks."""
-        mock_post, _ = _mock_xai_response({
-            "id": "chatcmpl-789",
-            "object": "chat.completion",
-            "choices": [{
-                "index": 0,
-                "message": {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [{
-                        "id": "call_abc123",
-                        "type": "function",
-                        "function": {
-                            "name": "Read",
-                            "arguments": json.dumps({"file_path": "/tmp/test.py"}),
-                        },
-                    }],
-                },
-                "finish_reason": "tool_calls",
-            }],
-            "usage": {"prompt_tokens": 20, "completion_tokens": 15, "total_tokens": 35},
-        })
+        """Verify function_call from Grok become Anthropic tool_use blocks."""
+        mock_post, _ = _mock_xai_response(
+            _responses_api_tool_call("Read", {"file_path": "/tmp/test.py"})
+        )
 
         import main
         with patch.object(main.client, "post", side_effect=mock_post):
@@ -249,6 +244,29 @@ class TestRequestTranslation:
             assert tool_block["name"] == "Read"
             assert tool_block["id"] == "call_abc123"
             assert tool_block["input"]["file_path"] == "/tmp/test.py"
+
+    def test_messages_sent_as_input_field(self, client: TestClient) -> None:
+        """Verify the Responses API uses 'input' field, not 'messages'."""
+        captured_request = {}
+
+        async def capture_post(*args, **kwargs):
+            captured_request.update(kwargs.get("json", {}))
+            mock_resp = MagicMock()
+            mock_resp.status_code = 200
+            mock_resp.json.return_value = _responses_api_text("OK")
+            return mock_resp
+
+        import main
+        with patch.object(main.client, "post", side_effect=capture_post):
+            client.post("/v1/messages", json={
+                "model": "claude-sonnet-4-20250514",
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": "Hello"}],
+            })
+
+        # Responses API uses 'input', not 'messages'
+        assert "input" in captured_request
+        assert "messages" not in captured_request
 
 
 class TestEnrichmentModeToggle:

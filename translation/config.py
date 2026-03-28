@@ -2,6 +2,14 @@
 
 Model name mapping, feature support matrix, and system prompt
 template path. All configuration is centralized here.
+
+Environment variables:
+- GROK_MODEL: Override the resolved model name for all requests.
+- XAI_API_KEY: xAI API key for authentication.
+- XAI_USE_CHAT_COMPLETIONS: Set to "true" to force legacy Chat Completions
+  path instead of the default Responses API (issue #51 migration escape hatch).
+- PREAMBLE_ENABLED: Set to "false" to disable behavioral preamble injection.
+- IDENTITY_ENABLED: Set to "false" to disable identity stripping/injection.
 """
 
 from __future__ import annotations

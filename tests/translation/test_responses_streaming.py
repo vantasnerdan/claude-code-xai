@@ -261,7 +261,7 @@ async def test_model_from_response_created():
     lines = [
         *_data_line("response.created", {
             "type": "response.created",
-            "response": {"model": "grok-4.20-multi-agent"},
+            "response": {"model": "grok-4-1-fast-reasoning"},
         }),
         *_data_line("response.in_progress", {"type": "response.in_progress"}),
         *_data_line("response.completed", {
@@ -274,4 +274,4 @@ async def test_model_from_response_created():
     events = [e async for e in adapter]
 
     msg_start = [e for e in events if e.get("type") == "message_start"]
-    assert msg_start[0]["message"]["model"] == "grok-4.20-multi-agent"
+    assert msg_start[0]["message"]["model"] == "grok-4-1-fast-reasoning"

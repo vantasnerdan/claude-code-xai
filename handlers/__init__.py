@@ -1,6 +1,7 @@
 """Request handlers for the xAI bridge.
 
-Separate handlers for Chat Completions and Responses API endpoints.
+Responses API is the default handler for all models (issue #51).
+Chat Completions is retained as a legacy fallback.
 """
 
 from handlers.chat_completions import handle_chat_completions, stream_chat

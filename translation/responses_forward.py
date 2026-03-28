@@ -1,5 +1,6 @@
 """Forward translation: Anthropic Messages API -> xAI Responses API.
 
+As of issue #51, this is the PRIMARY translation path for all models.
 The Responses API uses a different field layout than Chat Completions:
 - Messages go in 'input' (not 'messages')
 - System prompt is a message with role 'system' in the input array

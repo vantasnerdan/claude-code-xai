@@ -20,7 +20,7 @@ class TestResponsesToAnthropic:
                     "content": [{"type": "output_text", "text": "Hello there!"}],
                 }
             ],
-            "model": "grok-4.20-multi-agent",
+            "model": "grok-4-1-fast-reasoning",
             "usage": {"input_tokens": 10, "output_tokens": 5},
         }
         result = responses_to_anthropic(response)
@@ -45,7 +45,7 @@ class TestResponsesToAnthropic:
                     "arguments": '{"file_path": "/tmp/test.py"}',
                 }
             ],
-            "model": "grok-4.20-multi-agent",
+            "model": "grok-4-1-fast-reasoning",
             "usage": {},
         }
         result = responses_to_anthropic(response)
@@ -72,7 +72,7 @@ class TestResponsesToAnthropic:
                     "arguments": '{"command": "ls"}',
                 },
             ],
-            "model": "grok-4.20-multi-agent",
+            "model": "grok-4-1-fast-reasoning",
             "usage": {},
         }
         result = responses_to_anthropic(response)
@@ -91,7 +91,7 @@ class TestResponsesToAnthropic:
                     "content": [{"type": "output_text", "text": "The answer is 42."}],
                 },
             ],
-            "model": "grok-4.20-multi-agent",
+            "model": "grok-4-1-fast-reasoning",
             "usage": {},
         }
         result = responses_to_anthropic(response)
@@ -102,7 +102,7 @@ class TestResponsesToAnthropic:
         response = {
             "id": "rs_empty",
             "output": [],
-            "model": "grok-4.20-multi-agent",
+            "model": "grok-4-1-fast-reasoning",
             "usage": {},
         }
         result = responses_to_anthropic(response)
@@ -111,7 +111,7 @@ class TestResponsesToAnthropic:
         assert result["content"][0]["text"] == ""
 
     def test_id_prefix(self):
-        response = {"id": "rs_test", "output": [], "model": "grok-4.20-multi-agent", "usage": {}}
+        response = {"id": "rs_test", "output": [], "model": "grok-4-1-fast-reasoning", "usage": {}}
         result = responses_to_anthropic(response)
         assert result["id"].startswith("msg_")
 
@@ -119,7 +119,7 @@ class TestResponsesToAnthropic:
         response = {
             "id": "rs_usage",
             "output": [],
-            "model": "grok-4.20-multi-agent",
+            "model": "grok-4-1-fast-reasoning",
             "usage": {"prompt_tokens": 100, "completion_tokens": 50},
         }
         result = responses_to_anthropic(response)
@@ -136,7 +136,7 @@ class TestTranslateResponsesResponse:
             "output": [
                 {"type": "message", "content": [{"type": "output_text", "text": "OK"}]}
             ],
-            "model": "grok-4.20-multi-agent",
+            "model": "grok-4-1-fast-reasoning",
             "usage": {},
         }
         result = translate_responses_response(response, status_code=200)

@@ -380,13 +380,13 @@ class TestLiveToolCalling:
         assert "tools" in captured_request, "Outgoing request should have tools"
         assert len(captured_request["tools"]) == 1
 
-        # The tool should be in OpenAI format
+        # The tool should be in Responses API format (flat, not nested in 'function')
         tool = captured_request["tools"][0]
         assert tool["type"] == "function"
-        assert tool["function"]["name"] == "Read"
+        assert tool["name"] == "Read"
 
         # The parameters should preserve the original schema
-        params = tool["function"]["parameters"]
+        params = tool["parameters"]
         if isinstance(params, str):
             params = json.loads(params)
 
@@ -398,8 +398,8 @@ class TestLiveToolCalling:
         if enrichment_mode != "passthrough":
             # In structural/full mode, the enricher adds fields to the tool dict
             # before translation. The description should at least be present.
-            assert tool["function"]["description"] is not None
-            assert len(tool["function"]["description"]) > 0
+            assert tool["description"] is not None
+            assert len(tool["description"]) > 0
 
 
 # ======================================================================

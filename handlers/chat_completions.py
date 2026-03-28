@@ -1,6 +1,7 @@
 """Handler for Chat Completions API requests.
 
-Routes standard (non-multi-agent) models through /v1/chat/completions.
+LEGACY PATH: As of issue #51, this handler is only used when
+XAI_USE_CHAT_COMPLETIONS=true. The default path is handlers/responses.py.
 """
 
 from __future__ import annotations

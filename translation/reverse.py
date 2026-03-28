@@ -1,5 +1,9 @@
 """Reverse translation: OpenAI Chat Completions -> Anthropic Messages API.
 
+LEGACY PATH: As of issue #51, the Responses API (responses_reverse.py) is
+the default. This module is retained for the Chat Completions fallback,
+activated via XAI_USE_CHAT_COMPLETIONS=true.
+
 Converts xAI/Grok responses back to Claude Code format: content blocks,
 tool_use blocks, stop_reason mapping, usage translation, error formatting.
 """

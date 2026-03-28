@@ -1,6 +1,7 @@
 """Handler for Responses API requests.
 
-Routes multi-agent models through /v1/responses.
+As of issue #51, this is the DEFAULT handler for ALL models.
+The Responses API is the primary translation path.
 """
 
 from __future__ import annotations

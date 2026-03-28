@@ -1,6 +1,9 @@
 """End-to-end tests for Issue #15 gap categories -- no XAI_API_KEY required.
 
-Covers gaps NOT already handled by test_e2e.py (345 existing tests):
+As of issue #51, the default API path is the Responses API. Mock
+responses use Responses API format (output array, function_call items).
+
+Covers gaps NOT already handled by test_e2e.py:
 
 Category 1 -- Bridge Startup:
   - App startup with empty/missing XAI_API_KEY (warns, does not crash)
@@ -85,16 +88,17 @@ def _sample_request_with_tools() -> dict:
 
 
 def _success_response() -> dict:
-    """Standard successful OpenAI chat completion response."""
+    """Standard successful Responses API response."""
     return {
-        "id": "chatcmpl-e2e-001",
-        "object": "chat.completion",
-        "choices": [{
-            "index": 0,
-            "message": {"role": "assistant", "content": "Done."},
-            "finish_reason": "stop",
-        }],
-        "usage": {"prompt_tokens": 10, "completion_tokens": 3, "total_tokens": 13},
+        "id": "resp_e2e_001",
+        "output": [
+            {
+                "type": "message",
+                "content": [{"type": "output_text", "text": "Done."}],
+            }
+        ],
+        "model": "grok-4-1-fast-reasoning",
+        "usage": {"input_tokens": 10, "output_tokens": 3},
     }
 
 
@@ -219,12 +223,12 @@ class TestEnrichmentModesAppLevel:
         captured = self._capture_request(client, "passthrough")
         tools = captured.get("tools", [])
         assert len(tools) == 1
-        func = tools[0]["function"]
-        assert func["name"] == "Read"
+        # Responses API format: name at top level, not nested in 'function'
+        tool = tools[0]
+        assert tool["name"] == "Read"
 
         # Passthrough should NOT add structural or behavioral keys
-        # The tool function parameters should be the original schema only
-        params = json.loads(func["parameters"]) if isinstance(func["parameters"], str) else func["parameters"]
+        params = json.loads(tool["parameters"]) if isinstance(tool["parameters"], str) else tool["parameters"]
         assert "_links" not in params
         assert "_manifest" not in params
         assert "behavioral_what" not in params
@@ -235,11 +239,11 @@ class TestEnrichmentModesAppLevel:
         tools = captured.get("tools", [])
         assert len(tools) == 1
 
-        func = tools[0]["function"]
-        params = json.loads(func["parameters"]) if isinstance(func["parameters"], str) else func["parameters"]
+        # Responses API format: name at top level
+        tool = tools[0]
+        params = json.loads(tool["parameters"]) if isinstance(tool["parameters"], str) else tool["parameters"]
 
-        # Structural patterns should be present in the parameters
-        # (they get serialized into the function parameters in OpenAI format)
+        # Structural patterns may be present in the parameters
         # But behavioral fields should NOT be present
         assert "behavioral_what" not in params
         assert "behavioral_why" not in params
@@ -251,15 +255,12 @@ class TestEnrichmentModesAppLevel:
         tools = captured.get("tools", [])
         assert len(tools) == 1
 
-        func = tools[0]["function"]
-        params = json.loads(func["parameters"]) if isinstance(func["parameters"], str) else func["parameters"]
+        # Responses API format: name at top level
+        tool = tools[0]
+        params = json.loads(tool["parameters"]) if isinstance(tool["parameters"], str) else tool["parameters"]
 
-        # Full mode should include behavioral enrichment in the serialized tool
-        # The enriched fields end up in the parameters JSON
-        # (behavioral_what, behavioral_why, behavioral_when are added to tool dict
-        # before translation to OpenAI format)
-        # Verify the tool was processed (it should have more keys than raw)
-        assert func["name"] == "Read"
+        # Verify the tool was processed
+        assert tool["name"] == "Read"
 
 
 class TestPreambleAndIdentityAppLevel:
@@ -282,8 +283,9 @@ class TestPreambleAndIdentityAppLevel:
             importlib.reload(enrichment.system_preamble)
             import translation.config
             importlib.reload(translation.config)
-            import translation.forward
-            importlib.reload(translation.forward)
+            # Reload responses_forward (the default path) instead of forward
+            import translation.responses_forward
+            importlib.reload(translation.responses_forward)
 
             with patch.object(main.client, "post", side_effect=capture_post):
                 resp = client.post("/v1/messages", json={
@@ -297,10 +299,11 @@ class TestPreambleAndIdentityAppLevel:
         # Restore original modules
         importlib.reload(enrichment.system_preamble)
         importlib.reload(translation.config)
-        importlib.reload(translation.forward)
+        importlib.reload(translation.responses_forward)
 
-        messages = captured.get("messages", [])
-        system_msgs = [m for m in messages if m.get("role") == "system"]
+        # Responses API uses 'input' instead of 'messages'
+        input_msgs = captured.get("input", [])
+        system_msgs = [m for m in input_msgs if m.get("role") == "system"]
         return system_msgs[0]["content"] if system_msgs else ""
 
     def test_preamble_disabled_no_conventions_in_system(self, client: TestClient) -> None:
@@ -343,8 +346,8 @@ class TestPreambleAndIdentityAppLevel:
             importlib.reload(enrichment.system_preamble)
             import translation.config
             importlib.reload(translation.config)
-            import translation.forward
-            importlib.reload(translation.forward)
+            import translation.responses_forward
+            importlib.reload(translation.responses_forward)
 
             with patch.object(main.client, "post", side_effect=capture_post):
                 resp = client.post("/v1/messages", json={
@@ -357,10 +360,11 @@ class TestPreambleAndIdentityAppLevel:
 
         importlib.reload(enrichment.system_preamble)
         importlib.reload(translation.config)
-        importlib.reload(translation.forward)
+        importlib.reload(translation.responses_forward)
 
-        messages = captured.get("messages", [])
-        system_msgs = [m for m in messages if m.get("role") == "system"]
+        # Responses API uses 'input' instead of 'messages'
+        input_msgs = captured.get("input", [])
+        system_msgs = [m for m in input_msgs if m.get("role") == "system"]
         system_text = system_msgs[0]["content"] if system_msgs else ""
 
         # When identity is disabled, Claude references should remain

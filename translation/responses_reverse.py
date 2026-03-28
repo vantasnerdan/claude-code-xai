@@ -1,5 +1,6 @@
 """Reverse translation: xAI Responses API -> Anthropic Messages API.
 
+As of issue #51, this is the PRIMARY reverse translation path for all models.
 Converts Responses API output format back to Anthropic content blocks.
 The output array contains items with 'type' field:
 - 'message' with content[{type: 'output_text', text: '...'}]
@@ -42,7 +43,7 @@ def responses_to_anthropic(response: dict[str, Any]) -> dict[str, Any]:
         "type": "message",
         "role": "assistant",
         "content": content,
-        "model": response.get("model", "grok-4.20-multi-agent"),
+        "model": response.get("model", "grok-4-1-fast-reasoning"),
         "stop_reason": stop_reason,
         "stop_sequence": None,
         "usage": {

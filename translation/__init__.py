@@ -1,8 +1,10 @@
 """Bidirectional Anthropic <-> xAI protocol translation layer.
 
 Converts Claude Code (Anthropic Messages API) traffic into xAI/Grok
-format and back. Supports both Chat Completions and Responses API
-endpoints. Custom translation with enrichment injection hooks.
+format and back. As of issue #51, the Responses API is the default path
+for all models. Chat Completions is retained as a legacy fallback
+(XAI_USE_CHAT_COMPLETIONS=true). Custom translation with enrichment
+injection hooks.
 """
 
 from translation.forward import anthropic_to_openai, translate_messages, translate_tools, strip_thinking

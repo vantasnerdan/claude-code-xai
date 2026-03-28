@@ -1,11 +1,14 @@
 """Claude Code xAI Bridge -- Anthropic Messages API to xAI Grok proxy.
 
 Receives Claude Code traffic on /v1/messages, translates to xAI Responses
-API format (default) or legacy Chat Completions format, forwards to xAI,
-translates response back. Enrichment hooks inject Agentic API Standard context.
+API format, forwards to xAI, translates response back. Enrichment hooks
+inject Agentic API Standard context.
 
 As of issue #51, ALL models default to /v1/responses (Responses API).
-Set XAI_USE_CHAT_COMPLETIONS=true to force legacy /v1/chat/completions.
+As of issue #52, the Chat Completions handler delegates to the Responses
+handler — both code paths now use the same translation and transport.
+Set XAI_USE_CHAT_COMPLETIONS=true to force the legacy entry point (which
+still delegates to Responses API internally).
 """
 
 from fastapi import FastAPI, Request
@@ -19,7 +22,7 @@ from dotenv import load_dotenv
 from bridge.logging_config import configure_logging, get_logger
 from translation.forward import strip_thinking
 from translation.config import TranslationConfig
-from translation.model_routing import detect_endpoint, XAIEndpoint, _force_chat_completions
+from translation.model_routing import detect_endpoint, XAIEndpoint, use_legacy_chat_completions
 from translation.tools import set_tool_enrichment_hook, reset_enrichment_overhead
 from enrichment.factory import create_enricher
 from handlers.chat_completions import handle_chat_completions
@@ -43,7 +46,7 @@ logger.info("Enrichment mode: %s", enricher.config.mode)
 _config = TranslationConfig()
 
 # Log the default API path at startup.
-if _force_chat_completions():
+if use_legacy_chat_completions():
     logger.info("API path: Chat Completions (legacy, XAI_USE_CHAT_COMPLETIONS=true)")
 else:
     logger.info("API path: Responses API (default, issue #51 migration)")

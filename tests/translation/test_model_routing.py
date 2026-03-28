@@ -3,12 +3,16 @@
 As of issue #51, Responses API is the DEFAULT for all models.
 Chat Completions is only used when XAI_USE_CHAT_COMPLETIONS=true
 or for models in the _CHAT_COMPLETIONS_ONLY_MODELS set.
+
+As of issue #52, the env var is cached at import time.  Tests patch
+the cached ``_USE_CHAT_COMPLETIONS`` module variable directly so
+they are decoupled from os.getenv timing.
 """
 
-import os
 from unittest.mock import patch
 
-from translation.model_routing import detect_endpoint, XAIEndpoint
+import translation.model_routing as _mod
+from translation.model_routing import detect_endpoint, XAIEndpoint, use_legacy_chat_completions
 
 
 class TestDetectEndpointDefault:
@@ -34,42 +38,26 @@ class TestDetectEndpointDefault:
 
 
 class TestLegacyChatCompletionsOverride:
-    """XAI_USE_CHAT_COMPLETIONS=true forces Chat Completions for all models."""
+    """``_USE_CHAT_COMPLETIONS=True`` forces Chat Completions for all models."""
 
-    def test_env_true_forces_chat_completions(self):
-        with patch.dict(os.environ, {"XAI_USE_CHAT_COMPLETIONS": "true"}):
+    def test_cached_true_forces_chat_completions(self):
+        with patch.object(_mod, "_USE_CHAT_COMPLETIONS", True):
             assert detect_endpoint("grok-4-1-fast-reasoning") == XAIEndpoint.CHAT_COMPLETIONS
 
-    def test_env_1_forces_chat_completions(self):
-        with patch.dict(os.environ, {"XAI_USE_CHAT_COMPLETIONS": "1"}):
-            assert detect_endpoint("grok-4") == XAIEndpoint.CHAT_COMPLETIONS
-
-    def test_env_yes_forces_chat_completions(self):
-        with patch.dict(os.environ, {"XAI_USE_CHAT_COMPLETIONS": "yes"}):
-            assert detect_endpoint("grok-4-1-fast-reasoning") == XAIEndpoint.CHAT_COMPLETIONS
-
-    def test_env_TRUE_case_insensitive(self):
-        with patch.dict(os.environ, {"XAI_USE_CHAT_COMPLETIONS": "TRUE"}):
-            assert detect_endpoint("grok-4") == XAIEndpoint.CHAT_COMPLETIONS
-
-    def test_env_false_keeps_responses(self):
-        with patch.dict(os.environ, {"XAI_USE_CHAT_COMPLETIONS": "false"}):
-            assert detect_endpoint("grok-4-1-fast-reasoning") == XAIEndpoint.RESPONSES
-
-    def test_env_empty_keeps_responses(self):
-        with patch.dict(os.environ, {"XAI_USE_CHAT_COMPLETIONS": ""}):
-            assert detect_endpoint("grok-4-1-fast-reasoning") == XAIEndpoint.RESPONSES
-
-    def test_env_unset_keeps_responses(self):
-        env = os.environ.copy()
-        env.pop("XAI_USE_CHAT_COMPLETIONS", None)
-        with patch.dict(os.environ, env, clear=True):
+    def test_cached_false_keeps_responses(self):
+        with patch.object(_mod, "_USE_CHAT_COMPLETIONS", False):
             assert detect_endpoint("grok-4-1-fast-reasoning") == XAIEndpoint.RESPONSES
 
     def test_multi_agent_also_forced_to_chat_completions(self):
-        """Even multi-agent models are forced to Chat Completions when env is set."""
-        with patch.dict(os.environ, {"XAI_USE_CHAT_COMPLETIONS": "true"}):
+        """Even multi-agent models are forced to Chat Completions when flag is set."""
+        with patch.object(_mod, "_USE_CHAT_COMPLETIONS", True):
             assert detect_endpoint("grok-4.20-multi-agent") == XAIEndpoint.CHAT_COMPLETIONS
+
+    def test_use_legacy_chat_completions_returns_cached_value(self):
+        with patch.object(_mod, "_USE_CHAT_COMPLETIONS", True):
+            assert use_legacy_chat_completions() is True
+        with patch.object(_mod, "_USE_CHAT_COMPLETIONS", False):
+            assert use_legacy_chat_completions() is False
 
 
 class TestEndpointEnum:

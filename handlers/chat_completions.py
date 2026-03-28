@@ -1,23 +1,26 @@
-"""Handler for Chat Completions API requests.
+"""Handler for legacy Chat Completions API requests.
 
-LEGACY PATH: As of issue #51, this handler is only used when
-XAI_USE_CHAT_COMPLETIONS=true. The default path is handlers/responses.py.
+LEGACY FALLBACK: As of issue #52, this is a thin wrapper that converts
+legacy Chat Completions routing into Responses API handling. The actual
+translation and transport is delegated to handlers/responses.py.
+
+Activated only when XAI_USE_CHAT_COMPLETIONS=true.
+
+Previously this handler performed its own Anthropic-to-OpenAI translation,
+posted to /v1/chat/completions, and translated responses back. Now it
+delegates to the Responses API handler, preserving the same function
+signature so callers (main.py) do not need to change.
 """
 
 from __future__ import annotations
 
-import json
-import time
 from typing import Any
 
 from fastapi.responses import JSONResponse, StreamingResponse
 import httpx
 
-from bridge.logging_config import get_logger, dump_json, sanitize_request
-from bridge.token_logger import log_token_usage
-from translation.forward import anthropic_to_openai
-from translation.streaming import OpenAIToAnthropicStreamAdapter
-from translation.tools import get_last_enrichment_overhead
+from bridge.logging_config import get_logger
+from handlers.responses import handle_responses
 
 logger = get_logger("main")
 
@@ -29,64 +32,18 @@ async def handle_chat_completions(
     client: httpx.AsyncClient,
     api_key: str,
 ) -> JSONResponse | StreamingResponse:
-    """Forward request via /v1/chat/completions (standard models)."""
-    openai_body = anthropic_to_openai(body)
+    """Forward request via the Responses API (delegated).
 
-    logger.debug("Translated request: %s", json.dumps(sanitize_request(openai_body), default=str))
-    dump_json("request", sanitize_request(openai_body))
+    This is the legacy entry point. It preserves the original function
+    signature for backward compatibility but delegates all work to
+    :func:`handlers.responses.handle_responses`.
 
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
-
-    if openai_body.get("stream"):
-        return await stream_chat(
-            openai_body, headers, client, bridge_warnings, start,
-            model=openai_body.get("model", ""),
-        )
-
-    resp = await client.post("/chat/completions", json=openai_body, headers=headers)
-    data = resp.json()
-    elapsed = time.time() - start
-
-    # Guard against non-dict responses (e.g. plain text error body).
-    if not isinstance(data, dict):
-        logger.warning("Non-dict response from xAI: %s", str(data)[:500])
-        return JSONResponse(status_code=resp.status_code, content={
-            "type": "error", "error": {"type": "api_error", "message": str(data),
-                                        "suggestion": "Unexpected response format from xAI."}})
-
-    usage = data.get("usage", {})
-    choices = data.get("choices", [])
-    stop_reason = choices[0].get("finish_reason", "?") if choices else "?"
-    tool_calls_count = len(
-        (choices[0].get("message", {}).get("tool_calls") or []) if choices else []
-    )
-    logger.info(
-        "xAI response in %.2fs status=%d stop=%s tool_calls=%d tokens=%d/%d/%d",
-        elapsed, resp.status_code, stop_reason, tool_calls_count,
-        usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0),
-        usage.get("total_tokens", 0),
-    )
-
-    log_token_usage(
-        input_tokens=usage.get("prompt_tokens", 0),
-        output_tokens=usage.get("completion_tokens", 0),
-        enrichment_overhead_tokens=get_last_enrichment_overhead(),
-        elapsed_seconds=elapsed, is_streaming=False, model=openai_body.get("model", ""),
-    )
-
-    logger.debug("xAI response body: %s", json.dumps(data, default=str))
-    dump_json("response", data)
-
-    from translation.reverse import translate_response
-    result = translate_response(data, status_code=resp.status_code)
-
-    if resp.status_code != 200:
-        return JSONResponse(status_code=resp.status_code, content=result)
-
-    response_headers = {}
-    if bridge_warnings:
-        response_headers["X-Bridge-Warning"] = "; ".join(bridge_warnings)
-    return JSONResponse(content=result, headers=response_headers)
+    A deprecation warning header is injected so callers know they are
+    on the legacy path.
+    """
+    logger.info("Legacy Chat Completions path — delegating to Responses API handler")
+    bridge_warnings = [*bridge_warnings, "Legacy Chat Completions path: delegating to Responses API"]
+    return await handle_responses(body, bridge_warnings, start, client, api_key)
 
 
 async def stream_chat(
@@ -97,48 +54,18 @@ async def stream_chat(
     start_time: float = 0,
     model: str = "",
 ) -> StreamingResponse:
-    """Stream a Chat Completions response."""
-    event_count = 0
-    enrichment_overhead = get_last_enrichment_overhead()
+    """Legacy streaming entry point.
 
-    async def gen():
-        nonlocal event_count
-        async with client.stream("POST", "/chat/completions", json=openai_body, headers=headers) as resp:
-            logger.info("Streaming started status=%d", resp.status_code)
+    Retained for backward compatibility with any callers that imported
+    ``stream_chat`` directly. Delegates to
+    :func:`handlers.responses.stream_responses`.
 
-            if resp.status_code != 200:
-                error_body = await resp.aread()
-                logger.warning(
-                    "Streaming error status=%d body=%s",
-                    resp.status_code, error_body.decode("utf-8", errors="replace")[:1000],
-                )
-                error_event = {
-                    "type": "error",
-                    "error": {"type": "api_error", "message": f"xAI returned {resp.status_code}"},
-                }
-                yield f"event: error\ndata: {json.dumps(error_event)}\n\n"
-                return
+    .. deprecated:: issue #52
+        Use :func:`handlers.responses.stream_responses` directly.
+    """
+    from handlers.responses import stream_responses
 
-            async def lines():
-                async for line in resp.aiter_lines():
-                    if line:
-                        yield line
-            adapter = OpenAIToAnthropicStreamAdapter(lines())
-            async for event in adapter:
-                event_count += 1
-                yield f"event: {event.get('type', 'unknown')}\ndata: {json.dumps(event)}\n\n"
-            elapsed = time.time() - start_time if start_time else 0
-            logger.info("Streaming complete events=%d elapsed=%.2fs", event_count, elapsed)
-
-            usage = adapter.usage
-            log_token_usage(
-                input_tokens=usage.get("prompt_tokens", 0),
-                output_tokens=usage.get("completion_tokens", 0),
-                enrichment_overhead_tokens=enrichment_overhead,
-                elapsed_seconds=elapsed, is_streaming=True, model=model,
-            )
-
-    response_headers = {}
-    if bridge_warnings:
-        response_headers["X-Bridge-Warning"] = "; ".join(bridge_warnings)
-    return StreamingResponse(gen(), media_type="text/event-stream", headers=response_headers)
+    logger.warning("stream_chat() called directly — this is a deprecated code path")
+    return await stream_responses(
+        openai_body, headers, client, bridge_warnings, start_time, model,
+    )

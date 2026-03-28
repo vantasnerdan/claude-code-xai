@@ -3,6 +3,13 @@
 Anthropic and OpenAI use different SSE event formats. These fixtures
 provide the raw event data for both sides so the streaming translator
 can be validated.
+
+Sections:
+- Anthropic SSE events: what Claude Code expects to receive (used by all paths)
+- OpenAI SSE events: LEGACY Chat Completions streaming format
+  (used by translation.streaming when XAI_USE_CHAT_COMPLETIONS=true)
+- For Responses API streaming fixtures, see test_responses_streaming.py
+  which builds SSE lines inline using _data_line() helper.
 """
 
 import json
@@ -143,7 +150,9 @@ def anthropic_full_text_stream() -> list[dict[str, Any]]:
 
 
 # ---------------------------------------------------------------------------
-# OpenAI SSE data lines (what xAI/Grok actually sends over the wire)
+# LEGACY: OpenAI Chat Completions SSE data lines
+# Used by translation.streaming (Chat Completions streaming adapter).
+# The primary path now uses Responses API streaming (see test_responses_streaming.py).
 # ---------------------------------------------------------------------------
 
 

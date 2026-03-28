@@ -1,7 +1,11 @@
-"""Sample OpenAI Chat Completions API payloads for translation testing.
+"""LEGACY: Sample OpenAI Chat Completions API payloads for translation testing.
 
-These fixtures represent what xAI/Grok returns. The reverse translator
-converts these into Anthropic Messages API format for Claude Code.
+These fixtures represent the LEGACY Chat Completions format that xAI/Grok
+used to return before issue #51 migrated to the Responses API. They are
+retained for testing the legacy translation.reverse and translation.streaming
+modules which still handle this format when XAI_USE_CHAT_COMPLETIONS=true.
+
+For PRIMARY path fixtures, see tests/translation/fixtures/responses_api.py.
 """
 
 from typing import Any

@@ -1,8 +1,14 @@
 """Tests for forward translation: Anthropic Messages API -> OpenAI Chat Completions API.
 
-These tests define the contract for the `translation.forward` module.
-Every test imports from a module that does not exist yet — that is
-intentional. The tests ARE the spec; Nexus implements against them.
+These tests define the contract for the `translation.forward` module,
+which handles the LEGACY Chat Completions forward path. The PRIMARY
+forward path (`translation.responses_forward`) is tested in
+`test_responses_forward.py`.
+
+Both paths share common logic (system prompt handling, content block
+translation, tool_use/tool_result conversion). The forward module tests
+remain relevant because the CC forward path is still available when
+XAI_USE_CHAT_COMPLETIONS=true.
 
 The forward translator is responsible for:
 1. Extracting the top-level system field into a system role message

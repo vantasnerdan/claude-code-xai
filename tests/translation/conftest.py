@@ -1,7 +1,13 @@
-"""Translation-specific conftest — parametrized fixtures for message type coverage.
+"""Translation-specific conftest -- parametrized fixtures for message type coverage.
 
 Imports from fixture files and provides parametrized combinations
 for exhaustive testing of the translation layer.
+
+Fixtures are organized as:
+- Anthropic message fixtures (used by all paths)
+- LEGACY: OpenAI Chat Completions response fixtures (translation.reverse)
+- PRIMARY: Responses API response fixtures (translation.responses_reverse)
+- Streaming event fixtures (both legacy CC and primary Responses API)
 """
 
 import pytest
@@ -16,7 +22,7 @@ from tests.translation.fixtures.anthropic_messages import (
     parallel_tool_calls,
     full_request_with_tools,
 )
-from tests.translation.fixtures.openai_completions import (
+from tests.translation.fixtures.openai_completions import (  # LEGACY CC fixtures
     simple_completion,
     tool_call_completion,
     multi_tool_call_completion,
@@ -27,6 +33,14 @@ from tests.translation.fixtures.openai_completions import (
     error_response_429,
     error_response_500,
     error_response_400,
+)
+from tests.translation.fixtures.responses_api import (  # PRIMARY Responses API fixtures
+    simple_response as responses_simple,
+    function_call_response as responses_function_call,
+    multi_function_call_response as responses_multi_function_call,
+    error_response_429 as responses_error_429,
+    error_response_500 as responses_error_500,
+    error_response_400 as responses_error_400,
 )
 from tests.translation.fixtures.streaming_events import (
     anthropic_message_start,
@@ -91,13 +105,13 @@ def anthropic_full_request() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-# OpenAI response fixtures
+# LEGACY: OpenAI Chat Completions response fixtures
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
 def openai_text_response() -> dict[str, Any]:
-    """Simple text completion response."""
+    """LEGACY: Simple CC text completion response."""
     return simple_completion()
 
 
@@ -156,6 +170,29 @@ def openai_bad_request_error() -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# PRIMARY: Responses API response fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def responses_api_text_response() -> dict[str, Any]:
+    """PRIMARY: Simple Responses API text response."""
+    return responses_simple()
+
+
+@pytest.fixture
+def responses_api_tool_response() -> dict[str, Any]:
+    """PRIMARY: Responses API response with function_call."""
+    return responses_function_call()
+
+
+@pytest.fixture
+def responses_api_multi_tool_response() -> dict[str, Any]:
+    """PRIMARY: Responses API response with multiple function_calls."""
+    return responses_multi_function_call()
+
+
+# ---------------------------------------------------------------------------
 # Streaming event fixtures
 # ---------------------------------------------------------------------------
 
@@ -168,13 +205,13 @@ def anthropic_stream_events() -> list[dict[str, Any]]:
 
 @pytest.fixture
 def openai_stream_lines() -> list[str]:
-    """Complete OpenAI SSE data lines for a text response."""
+    """LEGACY: Complete CC SSE data lines for a text response."""
     return openai_stream_chunks()
 
 
 @pytest.fixture
 def openai_tool_stream_lines() -> list[str]:
-    """Complete OpenAI SSE data lines for a tool call response."""
+    """LEGACY: Complete CC SSE data lines for a tool call response."""
     return openai_tool_call_stream_chunks()
 
 
@@ -210,11 +247,28 @@ def anthropic_message_variant(request: pytest.FixtureRequest) -> dict[str, Any]:
     ]
 )
 def openai_response_variant(request: pytest.FixtureRequest) -> dict[str, Any]:
-    """Parametrized fixture providing each OpenAI response type."""
+    """LEGACY: Parametrized fixture providing each CC response type."""
     variants = {
         "text": simple_completion,
         "tool_call": tool_call_completion,
         "multi_tool": multi_tool_call_completion,
+    }
+    return variants[request.param]()
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("text", id="responses-text"),
+        pytest.param("function_call", id="responses-function-call"),
+        pytest.param("multi_function_call", id="responses-multi-function-call"),
+    ]
+)
+def responses_api_response_variant(request: pytest.FixtureRequest) -> dict[str, Any]:
+    """PRIMARY: Parametrized fixture providing each Responses API response type."""
+    variants = {
+        "text": responses_simple,
+        "function_call": responses_function_call,
+        "multi_function_call": responses_multi_function_call,
     }
     return variants[request.param]()
 
@@ -229,11 +283,31 @@ def openai_response_variant(request: pytest.FixtureRequest) -> dict[str, Any]:
 def openai_error_variant(
     request: pytest.FixtureRequest,
 ) -> tuple[int, dict[str, Any]]:
-    """Parametrized fixture providing each OpenAI error type with status code."""
+    """LEGACY: Parametrized fixture providing each CC error type with status code."""
     variants: dict[str, tuple[int, Any]] = {
         "rate_limit": (429, error_response_429),
         "server_error": (500, error_response_500),
         "bad_request": (400, error_response_400),
+    }
+    status_code, factory = variants[request.param]
+    return status_code, factory()
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("rate_limit", id="responses-429-rate-limit"),
+        pytest.param("server_error", id="responses-500-server-error"),
+        pytest.param("bad_request", id="responses-400-bad-request"),
+    ]
+)
+def responses_api_error_variant(
+    request: pytest.FixtureRequest,
+) -> tuple[int, dict[str, Any]]:
+    """PRIMARY: Parametrized fixture providing each Responses API error with status code."""
+    variants: dict[str, tuple[int, Any]] = {
+        "rate_limit": (429, responses_error_429),
+        "server_error": (500, responses_error_500),
+        "bad_request": (400, responses_error_400),
     }
     status_code, factory = variants[request.param]
     return status_code, factory()

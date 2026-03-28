@@ -1,7 +1,11 @@
-"""Tests for streaming adapter usage tracking (Issue #26).
+"""LEGACY: Tests for Chat Completions streaming adapter usage tracking (Issue #26).
 
 Verifies that OpenAIToAnthropicStreamAdapter captures token usage
-from streaming chunks for post-stream token logging.
+from Chat Completions streaming chunks for post-stream token logging.
+
+This tests the LEGACY Chat Completions streaming adapter. The PRIMARY
+streaming path (ResponsesStreamAdapter) has usage capture tested in
+test_responses_streaming.py::test_usage_captured.
 """
 
 from __future__ import annotations

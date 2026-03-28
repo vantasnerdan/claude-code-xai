@@ -1,10 +1,12 @@
-"""Tests for reverse translation: OpenAI Chat Completions API -> Anthropic Messages API.
+"""LEGACY: Tests for reverse translation: OpenAI Chat Completions API -> Anthropic Messages API.
 
-These tests define the contract for the `translation.reverse` module.
-The reverse translator converts xAI/Grok responses back into the format
-that Claude Code expects (Anthropic Messages API).
+These tests define the contract for the `translation.reverse` module,
+which handles the LEGACY Chat Completions format (XAI_USE_CHAT_COMPLETIONS=true).
 
-Key responsibilities:
+The PRIMARY reverse translation path is `translation.responses_reverse`,
+tested in `test_responses_reverse.py`.
+
+Key responsibilities of the legacy path:
 1. String content -> content block arrays
 2. tool_calls -> tool_use content blocks
 3. finish_reason mapping (stop->end_turn, tool_calls->tool_use, length->max_tokens)

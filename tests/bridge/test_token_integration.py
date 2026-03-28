@@ -3,6 +3,8 @@
 Verifies that token usage logs appear at INFO level for both
 non-streaming and streaming requests, and that enrichment overhead
 is captured when tools are present.
+
+Mock responses use Responses API format (the PRIMARY path since issue #51).
 """
 
 from __future__ import annotations
@@ -35,32 +37,26 @@ def _mock_xai_response(data: dict, status_code: int = 200):
 
 
 _SIMPLE_RESPONSE = {
-    "id": "chatcmpl-token1",
-    "object": "chat.completion",
-    "choices": [{
-        "index": 0,
-        "message": {"role": "assistant", "content": "Hello!"},
-        "finish_reason": "stop",
-    }],
-    "usage": {"prompt_tokens": 42, "completion_tokens": 8, "total_tokens": 50},
+    "id": "resp_token1",
+    "output": [
+        {"type": "message", "content": [{"type": "output_text", "text": "Hello!"}]},
+    ],
+    "model": "grok-4-1-fast-reasoning",
+    "usage": {"input_tokens": 42, "output_tokens": 8},
 }
 
 _TOOL_CALL_RESPONSE = {
-    "id": "chatcmpl-token2",
-    "object": "chat.completion",
-    "choices": [{
-        "index": 0,
-        "message": {
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [
-                {"id": "call_1", "type": "function",
-                 "function": {"name": "Read", "arguments": '{"file_path": "/tmp/x"}'}},
-            ],
+    "id": "resp_token2",
+    "output": [
+        {
+            "type": "function_call",
+            "call_id": "call_1",
+            "name": "Read",
+            "arguments": '{"file_path": "/tmp/x"}',
         },
-        "finish_reason": "tool_calls",
-    }],
-    "usage": {"prompt_tokens": 200, "completion_tokens": 30, "total_tokens": 230},
+    ],
+    "model": "grok-4-1-fast-reasoning",
+    "usage": {"input_tokens": 200, "output_tokens": 30},
 }
 
 

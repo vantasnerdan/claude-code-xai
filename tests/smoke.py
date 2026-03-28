@@ -77,25 +77,17 @@ SAMPLE_REQUEST = {
 }
 
 MOCK_XAI_RESPONSE = {
-    "id": "chatcmpl-smoke-001",
-    "object": "chat.completion",
-    "choices": [{
-        "index": 0,
-        "message": {
-            "role": "assistant",
-            "content": None,
-            "tool_calls": [{
-                "id": "call_smoke_001",
-                "type": "function",
-                "function": {
-                    "name": "Read",
-                    "arguments": json.dumps({"file_path": "/tmp/test.py"}),
-                },
-            }],
-        },
-        "finish_reason": "tool_calls",
-    }],
-    "usage": {"prompt_tokens": 50, "completion_tokens": 20, "total_tokens": 70},
+    "id": "resp_smoke_001",
+    "output": [
+        {
+            "type": "function_call",
+            "call_id": "call_smoke_001",
+            "name": "Read",
+            "arguments": json.dumps({"file_path": "/tmp/test.py"}),
+        }
+    ],
+    "model": "grok-4-1-fast-reasoning",
+    "usage": {"input_tokens": 50, "output_tokens": 20},
 }
 
 
@@ -233,22 +225,25 @@ def check_translation_mock(client: TestClient, r: Results) -> None:
     else:
         r.ok("translation.model_map", f"→ {model}")
 
-    # Verify system prompt was injected
-    msgs = captured.get("messages", [])
-    system_msgs = [m for m in msgs if m.get("role") == "system"]
+    # Verify system prompt was injected (Responses API uses 'input' array with system role)
+    input_msgs = captured.get("input", captured.get("messages", []))
+    system_msgs = [m for m in input_msgs if m.get("role") == "system"]
     if system_msgs:
         r.ok("translation.system_prompt", f"{len(system_msgs[0]['content'])} chars")
     else:
         r.ok("translation.system_prompt", "no system message (preamble may be disabled)")
 
-    # Verify tools were translated to OpenAI format
+    # Verify tools were translated to Responses API format
     tools = captured.get("tools", [])
     if not tools:
         r.fail("translation.tools_forward", "no tools in captured request")
     elif tools[0].get("type") != "function":
         r.fail("translation.tools_forward", f"expected type=function, got {tools[0].get('type')}")
     else:
-        r.ok("translation.tools_forward", f"{len(tools)} tools translated to OpenAI format")
+        # Responses API tools have flat format (no nested 'function' key)
+        has_function_key = "function" in tools[0]
+        fmt = "Chat Completions (nested)" if has_function_key else "Responses API (flat)"
+        r.ok("translation.tools_forward", f"{len(tools)} tools translated to {fmt} format")
 
     # Verify response translation
     data = resp.json()
@@ -303,10 +298,12 @@ def check_thinking_stripped(client: TestClient, r: Results) -> None:
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
-            "id": "chatcmpl-smoke-002",
-            "object": "chat.completion",
-            "choices": [{"index": 0, "message": {"role": "assistant", "content": "OK"}, "finish_reason": "stop"}],
-            "usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12},
+            "id": "resp_smoke_002",
+            "output": [
+                {"type": "message", "content": [{"type": "output_text", "text": "OK"}]},
+            ],
+            "model": "grok-4-1-fast-reasoning",
+            "usage": {"input_tokens": 10, "output_tokens": 2},
         }
         return mock_resp
 

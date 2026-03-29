@@ -58,6 +58,8 @@ class DataDrivenPatternApplicator(PatternApplicator):
       - optional _apply_to_tool hook for complex cases (default: set field = data)
     """
 
+    _field_name: str
+
     def __init__(self, tool_data: dict[str, Any] | None = None) -> None:
         self._tool_data = tool_data or {}
 

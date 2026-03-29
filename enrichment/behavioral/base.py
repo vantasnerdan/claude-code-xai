@@ -47,6 +47,8 @@ class DataDrivenBehavioralEnricher(BehavioralEnricher):
       - _enrichment_key class attribute (e.g. "behavioral_what")
     """
 
+    _enrichment_key: str
+
     def __init__(self, tool_data: dict[str, Any] | None = None) -> None:
         self._tool_data = tool_data or {}
 

@@ -16,9 +16,11 @@ class TestWhenEnricher:
     """Tests for the WHEN behavioral dimension."""
 
     @pytest.fixture
-    def enricher(self) -> WhenEnricher:
-        """Fresh WHEN enricher."""
-        return WhenEnricher()
+    def enricher(self, structure_data) -> WhenEnricher:
+        """Fresh WHEN enricher using YAML data."""
+        b = structure_data.get("behavioral", {})
+        when_tools = b.get("when", {}).get("tools", {})
+        return WhenEnricher(tool_data=when_tools)
 
     def test_dimension_is_when(self, enricher: WhenEnricher) -> None:
         """Dimension property returns 'when'."""

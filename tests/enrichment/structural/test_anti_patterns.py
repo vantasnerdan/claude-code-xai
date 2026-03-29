@@ -11,9 +11,11 @@ class TestAntiPatternsApplicator:
     """Tests for anti-pattern enrichment."""
 
     @pytest.fixture
-    def applicator(self) -> AntiPatternsApplicator:
-        """Fresh anti-patterns applicator."""
-        return AntiPatternsApplicator()
+    def applicator(self, structure_data) -> AntiPatternsApplicator:
+        """Fresh anti-patterns applicator using YAML data."""
+        s = structure_data.get("structural", {})
+        anti_tools = s.get("anti_patterns", {}).get("tools", {})
+        return AntiPatternsApplicator(tool_data=anti_tools)
 
     def test_pattern_metadata(self, applicator: AntiPatternsApplicator) -> None:
         """Pattern number and name are correct."""

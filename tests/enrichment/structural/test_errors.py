@@ -11,9 +11,11 @@ class TestErrorFormatApplicator:
     """Tests for error format enrichment."""
 
     @pytest.fixture
-    def applicator(self) -> ErrorFormatApplicator:
-        """Fresh error format applicator."""
-        return ErrorFormatApplicator()
+    def applicator(self, structure_data) -> ErrorFormatApplicator:
+        """Fresh error format applicator using YAML data."""
+        s = structure_data.get("structural", {})
+        errors_tools = s.get("errors", {}).get("tools", {})
+        return ErrorFormatApplicator(tool_data=errors_tools)
 
     def test_pattern_metadata(self, applicator: ErrorFormatApplicator) -> None:
         """Pattern number and name are correct."""

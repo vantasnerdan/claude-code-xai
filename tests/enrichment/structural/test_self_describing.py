@@ -16,9 +16,11 @@ class TestSelfDescribingApplicator:
     """Tests for self-describing schema enrichment."""
 
     @pytest.fixture
-    def applicator(self) -> SelfDescribingApplicator:
-        """Fresh self-describing applicator."""
-        return SelfDescribingApplicator()
+    def applicator(self, structure_data) -> SelfDescribingApplicator:
+        """Fresh self-describing applicator using YAML data."""
+        s = structure_data.get("structural", {})
+        self_tools = s.get("self_describing", {}).get("tools", {})
+        return SelfDescribingApplicator(tool_data=self_tools)
 
     def test_pattern_metadata(self, applicator: SelfDescribingApplicator) -> None:
         """Pattern number and name are correct."""

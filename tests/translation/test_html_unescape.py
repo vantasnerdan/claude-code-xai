@@ -15,7 +15,6 @@ Coverage:
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import Any, AsyncIterator
 
@@ -28,7 +27,6 @@ from translation.reverse import (
 )
 from translation.responses_reverse import responses_to_anthropic
 from translation.streaming import (
-    translate_sse_event,
     OpenAIToAnthropicStreamAdapter,
     _tool_events,
 )

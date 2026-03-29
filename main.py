@@ -52,6 +52,13 @@ else:
     logger.info("API path: Responses API (default, issue #51 migration)")
 
 
+@app.head("/")
+@app.get("/")
+async def root() -> dict:
+    """Health check for Claude Code connectivity probes (HEAD /)."""
+    return {"status": "ok"}
+
+
 @app.get("/manifest")
 async def get_manifest() -> dict:
     with open("manifest.json") as f:
@@ -62,7 +69,7 @@ async def get_manifest() -> dict:
 async def health() -> dict:
     return {
         "status": "healthy",
-        "model": os.getenv("GROK_MODEL", "grok-4-1-fast-reasoning"),
+        "model": os.getenv("GROK_MODEL", "grok-4.20-reasoning-latest"),
         "enrichment_mode": enricher.config.mode,
     }
 

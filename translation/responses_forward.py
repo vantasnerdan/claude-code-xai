@@ -71,8 +71,8 @@ def anthropic_to_responses(request: dict[str, Any]) -> dict[str, Any]:
         "stream": bool(request.get("stream")),
     }
 
-    # Reasoning effort for models that support it (grok-4.20-*, grok-4).
-    if "4.20" in resolved_model or resolved_model == "grok-4":
+    # Reasoning effort only for grok-4.20-multi-agent (only model that supports it).
+    if "multi-agent" in resolved_model:
         result["reasoning"] = {"effort": "high"}
 
     # Translate tools to Responses API format (enrichment runs inside).

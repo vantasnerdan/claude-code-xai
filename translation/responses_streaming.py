@@ -68,9 +68,9 @@ class ResponsesStreamAdapter:
         self._text_block_open = False
         self._tool_block_open = False
         self._block_index = 0
-        self._model = "grok-4-1-fast-reasoning"
+        self._model = "grok-4.20-reasoning-latest"
         self._q: list[dict[str, Any]] = []
-        self.usage: dict[str, int] = {}
+        self.usage: dict[str, Any] = {}
 
     def __aiter__(self) -> ResponsesStreamAdapter:
         return self

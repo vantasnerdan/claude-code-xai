@@ -10,6 +10,7 @@ tool_use blocks, stop_reason mapping, usage translation, error formatting.
 
 from __future__ import annotations
 
+import html
 import json
 import re
 import uuid
@@ -46,6 +47,32 @@ def unescape_text(text: str) -> str:
     return _LITERAL_ESCAPE_RE.sub(
         lambda m: _ESCAPE_MAP[m.group(0)], text
     )
+
+def unescape_html_entities(text: str) -> str:
+    """Unescape HTML entities in model output.
+
+    Grok may generate HTML entities (&amp; &lt; &gt; &quot; &#39;)
+    in tool call arguments instead of actual characters. This converts
+    them back so shell commands and code execute correctly.
+    """
+    if "&" not in text:
+        return text
+    return html.unescape(text)
+
+
+def _unescape_args(obj: Any) -> Any:
+    """Recursively unescape HTML entities in parsed tool arguments.
+
+    Walks dicts, lists, and strings. Non-string leaves pass through.
+    """
+    if isinstance(obj, str):
+        return unescape_html_entities(obj)
+    if isinstance(obj, dict):
+        return {k: _unescape_args(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_unescape_args(item) for item in obj]
+    return obj
+
 
 _ERROR_TYPE_MAP: dict[str, str] = {
     "rate_limit_error": "rate_limit_error",
@@ -117,6 +144,7 @@ def _build_content(message: dict[str, Any]) -> list[dict[str, Any]]:
                 args = json.loads(func.get("arguments", "{}"))
             except (json.JSONDecodeError, TypeError):
                 args = {}
+            args = _unescape_args(args)
             content.append({
                 "type": "tool_use",
                 "id": tc.get("id", f"toolu_{uuid.uuid4().hex[:24]}"),

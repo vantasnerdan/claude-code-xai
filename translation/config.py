@@ -22,11 +22,11 @@ from enrichment.system_preamble import get_system_preamble
 
 # Anthropic model name -> xAI/Grok model name
 MODEL_MAP: dict[str, str] = {
-    "claude-sonnet-4-20250514": "grok-4-1-fast-reasoning",
+    "claude-sonnet-4-20250514": "grok-4.20-reasoning-latest",
     "claude-opus-4-20250514": "grok-4",
-    "claude-haiku-3-20240307": "grok-4-1-fast-reasoning",
-    "claude-3-5-sonnet-20241022": "grok-4-1-fast-reasoning",
-    "claude-3-5-haiku-20241022": "grok-4-1-fast-reasoning",
+    "claude-haiku-3-20240307": "grok-4.20-reasoning-latest",
+    "claude-3-5-sonnet-20241022": "grok-4.20-reasoning-latest",
+    "claude-3-5-haiku-20241022": "grok-4.20-reasoning-latest",
 }
 
 # OpenAI finish_reason -> Anthropic stop_reason
@@ -58,9 +58,9 @@ STRIPPED_FEATURES: frozenset[str] = frozenset({
 class TranslationConfig:
     """Immutable translation configuration."""
 
-    default_model: str = "grok-4-1-fast-reasoning"
-    default_temperature: float = 0.3
-    default_max_tokens: int = 1048576
+    default_model: str = "grok-4.20-reasoning-latest"
+    default_temperature: float = 0.7
+    default_max_tokens: int = 131072
     system_prompt_preamble: str = field(
         default_factory=get_system_preamble
     )

@@ -139,6 +139,7 @@ async def stream_responses(
             logger.info("Responses streaming complete events=%d elapsed=%.2fs", event_count, elapsed)
 
             usage = adapter.usage
+            logger.info("xAI raw streaming usage: %s", json.dumps(usage, default=str))
             stream_prompt_details = usage.get("prompt_tokens_details", {})
             log_token_usage(
                 input_tokens=usage.get("input_tokens", usage.get("prompt_tokens", 0)),

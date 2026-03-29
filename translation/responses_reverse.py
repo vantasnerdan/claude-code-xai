@@ -38,7 +38,7 @@ def responses_to_anthropic(response: dict[str, Any]) -> dict[str, Any]:
     stop_reason = _infer_stop_reason(output)
 
     usage = response.get("usage", {})
-    prompt_details = usage.get("prompt_tokens_details", {})
+    prompt_details = usage.get("input_tokens_details", {})
     cached_tokens = prompt_details.get("cached_tokens", 0)
 
     anthropic_usage: dict[str, Any] = {

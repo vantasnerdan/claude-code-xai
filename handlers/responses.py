@@ -67,7 +67,7 @@ async def handle_responses(
                                         "suggestion": "Unexpected response format from xAI."}})
 
     usage = data.get("usage", {})
-    prompt_details = usage.get("prompt_tokens_details", {})
+    prompt_details = usage.get("input_tokens_details", {})
     output = data.get("output", [])
     output_types = [item.get("type", "?") for item in output] if isinstance(output, list) else []
     logger.info(
@@ -140,7 +140,7 @@ async def stream_responses(
 
             usage = adapter.usage
             logger.info("xAI raw streaming usage: %s", json.dumps(usage, default=str))
-            stream_prompt_details = usage.get("prompt_tokens_details", {})
+            stream_prompt_details = usage.get("input_tokens_details", {})
             log_token_usage(
                 input_tokens=usage.get("input_tokens", usage.get("prompt_tokens", 0)),
                 output_tokens=usage.get("output_tokens", usage.get("completion_tokens", 0)),

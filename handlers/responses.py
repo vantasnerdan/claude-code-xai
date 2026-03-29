@@ -6,6 +6,7 @@ The Responses API is the primary translation path.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import time
 import uuid
@@ -39,6 +40,23 @@ async def handle_responses(
 ) -> JSONResponse | StreamingResponse:
     """Forward request via /v1/responses (multi-agent models)."""
     responses_body = anthropic_to_responses(body)
+
+    # Cache diagnostics: hash system prompt, tools, and full prefix to track stability.
+    input_msgs = responses_body.get("input", [])
+    system_content = ""
+    for msg in input_msgs:
+        if msg.get("role") == "system":
+            system_content = msg.get("content", "")
+            break
+    tools_json = json.dumps(responses_body.get("tools", []), sort_keys=True, default=str)
+    sys_hash = hashlib.md5(system_content.encode()).hexdigest()[:8]
+    tools_hash = hashlib.md5(tools_json.encode()).hexdigest()[:8]
+    sys_tokens = len(system_content) // 4  # rough estimate
+    tools_tokens = len(tools_json) // 4
+    logger.info(
+        "Cache prefix: sys_hash=%s sys_tokens~%d tools_hash=%s tools_tokens~%d msgs=%d",
+        sys_hash, sys_tokens, tools_hash, tools_tokens, len(input_msgs) - 1,
+    )
 
     logger.debug("Translated Responses request: %s", json.dumps(sanitize_request(responses_body), default=str))
     dump_json("request_responses", sanitize_request(responses_body))

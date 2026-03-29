@@ -15,7 +15,7 @@ import uuid
 from typing import Any
 
 from bridge.logging_config import get_logger
-from translation.reverse import unescape_text, _ERROR_SUGGESTIONS
+from translation.reverse import unescape_text, _unescape_args, _ERROR_SUGGESTIONS
 
 logger = get_logger("responses_reverse")
 
@@ -102,6 +102,7 @@ def _build_content(output: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 args = json.loads(arguments) if isinstance(arguments, str) else arguments
             except (json.JSONDecodeError, TypeError):
                 args = {}
+            args = _unescape_args(args)
             content.append({
                 "type": "tool_use",
                 "id": item.get("call_id", f"toolu_{uuid.uuid4().hex[:24]}"),

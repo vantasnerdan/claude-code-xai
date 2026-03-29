@@ -8,7 +8,7 @@ from __future__ import annotations
 import json, uuid
 from typing import Any, AsyncIterator
 from translation.config import STOP_REASON_MAP
-from translation.reverse import unescape_text
+from translation.reverse import unescape_text, unescape_html_entities
 
 
 def _msg_start(chunk: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -35,7 +35,7 @@ def _tool_events(tc: dict[str, Any]) -> list[dict[str, Any]]:
                       "content_block": {"type": "tool_use", "id": tc["id"], "name": func.get("name", ""), "input": {}}})
     if func.get("arguments", ""):
         evts.append({"type": "content_block_delta", "index": idx,
-                      "delta": {"type": "input_json_delta", "partial_json": func["arguments"]}})
+                      "delta": {"type": "input_json_delta", "partial_json": unescape_html_entities(func["arguments"])}})
     return evts
 
 

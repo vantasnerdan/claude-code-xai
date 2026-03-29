@@ -16,7 +16,7 @@ import uuid
 from typing import Any, AsyncIterator
 
 from translation.config import STOP_REASON_MAP
-from translation.reverse import unescape_text
+from translation.reverse import unescape_text, unescape_html_entities
 
 
 def _msg_start(model: str = "grok-4-1-fast-reasoning") -> dict[str, Any]:
@@ -169,6 +169,7 @@ class ResponsesStreamAdapter:
                 events.append(_msg_start(self._model))
             delta = data.get("delta", "")
             if delta:
+                delta = unescape_html_entities(delta)
                 events.append({
                     "type": "content_block_delta",
                     "index": self._block_index,

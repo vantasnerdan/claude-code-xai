@@ -11,9 +11,11 @@ class TestHateoasApplicator:
     """Tests for HATEOAS link enrichment."""
 
     @pytest.fixture
-    def applicator(self) -> HateoasApplicator:
-        """Fresh HATEOAS applicator."""
-        return HateoasApplicator()
+    def applicator(self, structure_data) -> HateoasApplicator:
+        """Fresh HATEOAS applicator using YAML data."""
+        s = structure_data.get("structural", {})
+        hateoas_tools = s.get("hateoas", {}).get("tools", {})
+        return HateoasApplicator(tool_data=hateoas_tools)
 
     def test_pattern_metadata(self, applicator: HateoasApplicator) -> None:
         """Pattern number and name are correct."""

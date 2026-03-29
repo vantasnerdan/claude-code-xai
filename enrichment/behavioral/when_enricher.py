@@ -3,14 +3,12 @@
 Adds prerequisite, alternative, and sequencing knowledge to tool definitions —
 the reasoning about WHEN to use a tool relative to other tools.
 """
-import copy
 from typing import Any
 
-from enrichment.behavioral.base import BehavioralEnricher
-from enrichment.behavioral.tool_knowledge import TOOL_KNOWLEDGE
+from enrichment.behavioral.base import DataDrivenBehavioralEnricher
 
 
-class WhenEnricher(BehavioralEnricher):
+class WhenEnricher(DataDrivenBehavioralEnricher):
     """Enriches tool definitions with WHEN context.
 
     The WHEN dimension captures:
@@ -20,33 +18,12 @@ class WhenEnricher(BehavioralEnricher):
       - do_not_use_for: Operations where another tool is preferred
       - sequencing: Natural language description of tool ordering
 
-    Args:
-        tool_data: Per-tool WHEN dicts from YAML. When None, uses built-in TOOL_KNOWLEDGE.
+    Uses DataDrivenBehavioralEnricher base. YAML is single source of truth.
+    Note: when schema is non-uniform (do_not_use_for for some tools).
     """
 
-    def __init__(self, tool_data: dict[str, dict[str, Any]] | None = None) -> None:
-        self._tool_data = tool_data
+    _enrichment_key = "behavioral_when"
 
     @property
     def dimension(self) -> str:
         return "when"
-
-    def enrich(self, tool: dict[str, Any]) -> dict[str, Any]:
-        """Add sequencing and prerequisite data to tool definition.
-
-        Adds a 'behavioral_when' key with prerequisites, alternatives,
-        and sequencing guidance.
-        """
-        enriched = copy.deepcopy(tool)
-        tool_name = tool.get("name", "")
-
-        if self._tool_data is not None:
-            when_data = self._tool_data.get(tool_name)
-            if when_data:
-                enriched["behavioral_when"] = when_data
-        else:
-            knowledge = TOOL_KNOWLEDGE.get(tool_name)
-            if knowledge and "when" in knowledge:
-                enriched["behavioral_when"] = knowledge["when"]
-
-        return enriched

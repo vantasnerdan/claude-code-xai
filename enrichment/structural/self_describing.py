@@ -7,76 +7,22 @@ This is the most important structural pattern for tool-use accuracy.
 import copy
 from typing import Any
 
-from enrichment.structural.base import PatternApplicator
+from enrichment.structural.base import DataDrivenPatternApplicator
 
 
-class SelfDescribingApplicator(PatternApplicator):
+class SelfDescribingApplicator(DataDrivenPatternApplicator):
     """Applies Agentic API Standard Pattern 6: Self-Describing Schemas.
 
-    Ensures every tool has inputSchema and outputSchema. If inputSchema
-    exists (from the original tool definition), it is preserved. If missing,
-    a stub is added. outputSchema is always added since tool definitions
-    typically lack it.
-
-    Args:
-        tool_data: Per-tool output schema data from YAML. When None, uses built-in defaults.
+    Ensures every tool has inputSchema and outputSchema. Uses DataDriven
+    base for init (YAML single source of truth). Overrides apply/validate
+    due to inputSchema stub logic.
     """
 
-    _DEFAULTS: dict[str, dict[str, Any]] = {
-        "Read": {
-            "type": "object",
-            "properties": {
-                "content": {
-                    "type": "string",
-                    "description": "File content with line numbers (cat -n format)",
-                },
-            },
-        },
-        "Edit": {
-            "type": "object",
-            "properties": {
-                "success": {"type": "boolean"},
-                "error": {"type": "string", "description": "Error message if edit failed"},
-            },
-        },
-        "Write": {
-            "type": "object",
-            "properties": {
-                "success": {"type": "boolean"},
-                "file_path": {"type": "string", "description": "Path of written file"},
-            },
-        },
-        "Bash": {
-            "type": "object",
-            "properties": {
-                "stdout": {"type": "string"},
-                "stderr": {"type": "string"},
-                "exit_code": {"type": "integer"},
-            },
-        },
-        "Grep": {
-            "type": "object",
-            "properties": {
-                "matches": {
-                    "type": "array",
-                    "description": "Matching lines, file paths, or counts depending on output_mode",
-                },
-            },
-        },
-        "Glob": {
-            "type": "object",
-            "properties": {
-                "files": {
-                    "type": "array",
-                    "items": {"type": "string"},
-                    "description": "Matching file paths sorted by modification time",
-                },
-            },
-        },
-    }
+    _field_name = "outputSchema"
 
     def __init__(self, tool_data: dict[str, dict[str, Any]] | None = None) -> None:
-        self._output_schemas = tool_data if tool_data is not None else self._DEFAULTS
+        super().__init__(tool_data)
+        self._output_schemas = self._tool_data
 
     @property
     def pattern_number(self) -> int:

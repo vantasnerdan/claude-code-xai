@@ -11,9 +11,11 @@ class TestWhyEnricher:
     """Tests for the WHY behavioral dimension."""
 
     @pytest.fixture
-    def enricher(self) -> WhyEnricher:
-        """Fresh WHY enricher."""
-        return WhyEnricher()
+    def enricher(self, structure_data) -> WhyEnricher:
+        """Fresh WHY enricher using YAML data."""
+        b = structure_data.get("behavioral", {})
+        why_tools = b.get("why", {}).get("tools", {})
+        return WhyEnricher(tool_data=why_tools)
 
     def test_dimension_is_why(self, enricher: WhyEnricher) -> None:
         """Dimension property returns 'why'."""

@@ -11,9 +11,11 @@ class TestWhatEnricher:
     """Tests for the WHAT behavioral dimension."""
 
     @pytest.fixture
-    def enricher(self) -> WhatEnricher:
-        """Fresh WHAT enricher."""
-        return WhatEnricher()
+    def enricher(self, structure_data) -> WhatEnricher:
+        """Fresh WHAT enricher using YAML data."""
+        b = structure_data.get("behavioral", {})
+        what_tools = b.get("what", {}).get("tools", {})
+        return WhatEnricher(tool_data=what_tools)
 
     def test_dimension_is_what(self, enricher: WhatEnricher) -> None:
         """Dimension property returns 'what'."""

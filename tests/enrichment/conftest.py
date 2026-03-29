@@ -19,6 +19,7 @@ from enrichment.structural.tool_registration import ToolRegistrationApplicator
 from enrichment.behavioral.what_enricher import WhatEnricher
 from enrichment.behavioral.why_enricher import WhyEnricher
 from enrichment.behavioral.when_enricher import WhenEnricher
+from enrichment.structure_loader import StructureLoader, get_default_structure_dir
 
 
 @pytest.fixture
@@ -76,18 +77,37 @@ def unknown_tool() -> dict[str, Any]:
     }
 
 
+@pytest.fixture(scope="session")
+def structure_data() -> dict[str, Any]:
+    """Loaded YAML structure data (single source of truth for tests)."""
+    loader = StructureLoader(get_default_structure_dir())
+    return loader.load()
+
+
 @pytest.fixture
-def all_structural_patterns() -> list:
-    """All structural pattern applicators."""
+def all_structural_patterns(structure_data) -> list:
+    """All structural pattern applicators using real YAML data."""
+    s = structure_data.get("structural", {})
     return [
-        ManifestApplicator(),
-        HateoasApplicator(),
-        ErrorFormatApplicator(),
-        NearMissApplicator(),
-        SelfDescribingApplicator(),
-        QualityGatesApplicator(),
-        AntiPatternsApplicator(),
-        ToolRegistrationApplicator(),
+        ManifestApplicator(manifest_data=s.get("manifest", {}).get("manifest")),
+        HateoasApplicator(tool_data=s.get("hateoas", {}).get("tools")),
+        ErrorFormatApplicator(tool_data=s.get("errors", {}).get("tools")),
+        NearMissApplicator(tool_data=s.get("near_miss", {}).get("tools")),
+        SelfDescribingApplicator(tool_data=s.get("self_describing", {}).get("tools")),
+        QualityGatesApplicator(tool_data=s.get("quality_gates", {}).get("tools")),
+        AntiPatternsApplicator(tool_data=s.get("anti_patterns", {}).get("tools")),
+        ToolRegistrationApplicator(registration_data=s.get("tool_registration", {}).get("registration")),
+    ]
+
+
+@pytest.fixture
+def all_behavioral_enrichers(structure_data) -> list:
+    """All behavioral enrichers using real YAML data."""
+    b = structure_data.get("behavioral", {})
+    return [
+        WhatEnricher(tool_data=b.get("what", {}).get("tools")),
+        WhyEnricher(tool_data=b.get("why", {}).get("tools")),
+        WhenEnricher(tool_data=b.get("when", {}).get("tools")),
     ]
 
 

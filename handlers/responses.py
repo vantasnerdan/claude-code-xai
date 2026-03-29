@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import time
+import uuid
 from typing import Any
 
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -21,6 +22,12 @@ from translation.responses_streaming import ResponsesStreamAdapter
 from translation.tools import get_last_enrichment_overhead
 
 logger = get_logger("main")
+
+# Stable conversation ID for xAI prompt caching server affinity.
+# Generated once per bridge process — all requests route to the same xAI
+# server, enabling automatic prefix caching (90% input token discount).
+# See: https://docs.x.ai/developers/advanced-api-usage/prompt-caching
+_CONV_ID = str(uuid.uuid4())
 
 
 async def handle_responses(
@@ -36,7 +43,11 @@ async def handle_responses(
     logger.debug("Translated Responses request: %s", json.dumps(sanitize_request(responses_body), default=str))
     dump_json("request_responses", sanitize_request(responses_body))
 
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "x-grok-conv-id": _CONV_ID,
+    }
 
     if responses_body.get("stream"):
         return await stream_responses(
@@ -56,6 +67,7 @@ async def handle_responses(
                                         "suggestion": "Unexpected response format from xAI."}})
 
     usage = data.get("usage", {})
+    prompt_details = usage.get("prompt_tokens_details", {})
     output = data.get("output", [])
     output_types = [item.get("type", "?") for item in output] if isinstance(output, list) else []
     logger.info(
@@ -66,6 +78,7 @@ async def handle_responses(
     log_token_usage(
         input_tokens=usage.get("input_tokens", usage.get("prompt_tokens", 0)),
         output_tokens=usage.get("output_tokens", usage.get("completion_tokens", 0)),
+        cached_tokens=prompt_details.get("cached_tokens", 0),
         enrichment_overhead_tokens=get_last_enrichment_overhead(),
         elapsed_seconds=elapsed, is_streaming=False, model=responses_body.get("model", ""),
     )
@@ -126,9 +139,11 @@ async def stream_responses(
             logger.info("Responses streaming complete events=%d elapsed=%.2fs", event_count, elapsed)
 
             usage = adapter.usage
+            stream_prompt_details = usage.get("prompt_tokens_details", {})
             log_token_usage(
                 input_tokens=usage.get("input_tokens", usage.get("prompt_tokens", 0)),
                 output_tokens=usage.get("output_tokens", usage.get("completion_tokens", 0)),
+                cached_tokens=stream_prompt_details.get("cached_tokens", 0),
                 enrichment_overhead_tokens=enrichment_overhead,
                 elapsed_seconds=elapsed, is_streaming=True, model=model,
             )

@@ -47,6 +47,7 @@ def log_token_usage(
     *,
     input_tokens: int,
     output_tokens: int,
+    cached_tokens: int = 0,
     enrichment_overhead_tokens: int = 0,
     elapsed_seconds: float = 0.0,
     is_streaming: bool = False,
@@ -60,6 +61,7 @@ def log_token_usage(
     Args:
         input_tokens: Tokens consumed by the prompt (from xAI usage).
         output_tokens: Tokens generated in the response (from xAI usage).
+        cached_tokens: Tokens served from xAI prompt cache (90% discount).
         enrichment_overhead_tokens: Estimated tokens added by enrichment.
         elapsed_seconds: Total request time in seconds.
         is_streaming: Whether this was a streaming request.
@@ -68,20 +70,24 @@ def log_token_usage(
     total_tokens = input_tokens + output_tokens
     mode = "stream" if is_streaming else "sync"
 
-    summary = {
+    summary: dict[str, Any] = {
         "input_tokens": input_tokens,
         "output_tokens": output_tokens,
         "total_tokens": total_tokens,
         "enrichment_overhead_tokens": enrichment_overhead_tokens,
     }
+    if cached_tokens:
+        summary["cached_tokens"] = cached_tokens
 
+    cache_part = f" cached={cached_tokens}" if cached_tokens else ""
     logger.info(
-        "Token usage: model=%s input=%d output=%d total=%d "
+        "Token usage: model=%s input=%d output=%d total=%d%s "
         "enrichment_overhead=%d mode=%s elapsed=%.2fs",
         model or "unknown",
         input_tokens,
         output_tokens,
         total_tokens,
+        cache_part,
         enrichment_overhead_tokens,
         mode,
         elapsed_seconds,

@@ -38,18 +38,26 @@ def responses_to_anthropic(response: dict[str, Any]) -> dict[str, Any]:
     stop_reason = _infer_stop_reason(output)
 
     usage = response.get("usage", {})
+    prompt_details = usage.get("prompt_tokens_details", {})
+    cached_tokens = prompt_details.get("cached_tokens", 0)
+
+    anthropic_usage: dict[str, Any] = {
+        "input_tokens": usage.get("input_tokens", usage.get("prompt_tokens", 0)),
+        "output_tokens": usage.get("output_tokens", usage.get("completion_tokens", 0)),
+    }
+    if cached_tokens:
+        anthropic_usage["cache_read_input_tokens"] = cached_tokens
+        anthropic_usage["cache_creation_input_tokens"] = 0
+
     return {
         "id": rid,
         "type": "message",
         "role": "assistant",
         "content": content,
-        "model": response.get("model", "grok-4-1-fast-reasoning"),
+        "model": response.get("model", "grok-4.20-reasoning-latest"),
         "stop_reason": stop_reason,
         "stop_sequence": None,
-        "usage": {
-            "input_tokens": usage.get("input_tokens", usage.get("prompt_tokens", 0)),
-            "output_tokens": usage.get("output_tokens", usage.get("completion_tokens", 0)),
-        },
+        "usage": anthropic_usage,
     }
 
 

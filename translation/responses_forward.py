@@ -60,12 +60,20 @@ def anthropic_to_responses(request: dict[str, Any]) -> dict[str, Any]:
 
     input_messages.extend(_translate_messages(request.get("messages", [])))
 
+    resolved_model = _config.resolve_model(request.get("model", ""))
+
     result: dict[str, Any] = {
-        "model": _config.resolve_model(request.get("model", "")),
+        "model": resolved_model,
         "input": input_messages,
+        "max_output_tokens": request.get("max_tokens", _config.default_max_tokens),
+        "temperature": request.get("temperature", _config.default_temperature),
         "store": False,
         "stream": bool(request.get("stream")),
     }
+
+    # Reasoning effort for models that support it (grok-4, not grok-4-1-fast-reasoning).
+    if "fast-reasoning" not in resolved_model:
+        result["reasoning"] = {"effort": "high"}
 
     # Translate tools to Responses API format (enrichment runs inside).
     tools = request.get("tools")

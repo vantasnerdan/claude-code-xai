@@ -59,8 +59,8 @@ class TranslationConfig:
     """Immutable translation configuration."""
 
     default_model: str = "grok-4-1-fast-reasoning"
-    default_temperature: float = 0.3
-    default_max_tokens: int = 1048576
+    default_temperature: float = 0.7
+    default_max_tokens: int = 131072
     system_prompt_preamble: str = field(
         default_factory=get_system_preamble
     )

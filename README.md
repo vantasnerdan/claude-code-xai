@@ -76,19 +76,29 @@ Claude Code (Anthropic Messages API)
 │  ┌───────────────▼───────────────┐  │
 │  │   Protocol Translation Layer  │  │
 │  │                               │  │
-│  │  Forward:  Messages → Chat    │  │
-│  │  Reverse:  Chat → Messages    │  │
-│  │  Streaming: SSE ↔ SSE        │  │
-│  │  Tools: tool_use ↔ functions  │  │
+│  │  Forward:  Messages →         │  │
+│  │    xAI Responses API input    │  │
+│  │  Reverse:  Responses output → │  │
+│  │    Anthropic content blocks   │  │
+│  │  Streaming: Anthropic SSE ↔   │  │
+│  │    Responses semantic events  │  │
+│  │  Tools: tool_use ↔            │  │
+│  │    function_call items        │  │
 │  └───────────────┬───────────────┘  │
 │                  │                  │
 └──────────────────┼──────────────────┘
                    │
                    ▼
-        xAI API (Grok 4.20)
+    xAI Responses API (POST /v1/responses)
 ```
 
 Every request flows through three stages: behavioral context injection, tool definition enrichment, and protocol translation. Responses flow back through the reverse path. Streaming is fully supported.
+
+### Responses API as the Default (Issue #51)
+
+As of the Responses API migration (PRs [#55](https://github.com/vantasnerdan/claude-code-xai/pull/55), [#56](https://github.com/vantasnerdan/claude-code-xai/pull/56), [#57](https://github.com/vantasnerdan/claude-code-xai/pull/57), [#58](https://github.com/vantasnerdan/claude-code-xai/pull/58)), the bridge posts to xAI's [`/v1/responses`](https://docs.x.ai/docs/api-reference#responses) endpoint for every model. Responses is xAI's forward-path API and the only endpoint that supports multi-agent models. The legacy Chat Completions path is retained as an opt-in fallback via `XAI_USE_CHAT_COMPLETIONS=true` — when set, the legacy entry point is activated but internally still delegates to the Responses handler (see `handlers/chat_completions.py`).
+
+Nothing changes for Claude Code: the bridge still exposes Anthropic's `/v1/messages` contract. Only the xAI-facing wire format changed.
 
 ## The Proof
 
@@ -175,10 +185,15 @@ python -m benchmarks --output-dir results/  # Save to directory
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `XAI_API_KEY` | — | Your xAI API key (required) |
-| `GROK_MODEL` | `grok-4-1-fast-reasoning` | Grok model to use |
+| `GROK_MODEL` | `grok-4.20-reasoning-latest` | Grok model to use. Overrides the Anthropic → Grok model map. |
+| `XAI_USE_CHAT_COMPLETIONS` | `false` | Opt-in escape hatch to force the legacy Chat Completions entry point (still delegates to Responses internally) |
 | `ENRICHMENT_MODE` | `full` | `passthrough` / `structural` / `full` |
 | `PREAMBLE_ENABLED` | `true` | System prompt behavioral injection |
+| `IDENTITY_ENABLED` | `true` | Grok identity assertion + Claude identity stripping from the system prompt |
 | `STRUCTURE_DIR` | `./structure` | Path to enrichment YAML definitions |
+| `LOG_LEVEL` | `INFO` | `DEBUG` / `INFO` / `WARNING` / `ERROR` — controls the `bridge.*` logger hierarchy |
+| `DUMP_REQUESTS` | `false` | Write full request/response JSON to `DUMP_DIR` for debugging |
+| `DUMP_DIR` | `./dumps` | Directory for request/response JSON dumps when `DUMP_REQUESTS=true` |
 | `HOST` | `0.0.0.0` | Bridge listen address |
 | `PORT` | `4000` | Bridge listen port |
 
@@ -204,25 +219,47 @@ The enrichment engine applies 8 patterns to tool definitions. The bridge itself 
 
 ### Protocol Translation
 
-The translation layer handles bidirectional conversion between Anthropic's Messages API and OpenAI's Chat Completions API:
+The translation layer handles bidirectional conversion between Anthropic's Messages API and xAI's Responses API. The Responses API has a different field layout than Chat Completions — `input` instead of `messages`, `output` array instead of `choices`, `function_call` items instead of nested `function` objects, `function_call_output` instead of `role: "tool"` messages, and semantic streaming events instead of flat delta chunks.
 
-| Anthropic | OpenAI | Direction |
-|-----------|--------|-----------|
-| `content: [{type: "text", text: "..."}]` | `content: "..."` | Forward |
-| `content: [{type: "tool_use", id, name, input}]` | `tool_calls: [{id, function: {name, arguments}}]` | Forward |
-| `content: [{type: "tool_result", tool_use_id}]` | `{role: "tool", tool_call_id}` | Forward |
-| `system: "..."` (top-level) | `{role: "system", content: "..."}` | Forward |
-| `stop_reason: "end_turn"` | `finish_reason: "stop"` | Reverse |
-| SSE `message_start` / `content_block_delta` | SSE `chat.completion.chunk` | Both |
+| Anthropic | xAI Responses | Direction |
+|-----------|--------------|-----------|
+| `content: [{type: "text", text: "..."}]` | input item `{role, content: "..."}` | Forward |
+| `content: [{type: "tool_use", id, name, input}]` | input item `{type: "function_call", call_id, name, arguments}` | Forward |
+| `content: [{type: "tool_result", tool_use_id, content}]` | input item `{type: "function_call_output", call_id, output}` | Forward |
+| `system: "..."` (top-level) | first input item `{role: "system", content}` | Forward |
+| `max_tokens` | `max_output_tokens` | Forward |
+| `thinking` (stripped) | `reasoning: {effort: "high"}` (multi-agent models only) | Forward |
+| `stop_reason: "end_turn" / "tool_use"` | derived from `output` item types (`function_call` → `tool_use`) | Reverse |
+| SSE `message_start` / `content_block_delta` / `message_stop` | SSE `response.created` / `response.output_text.delta` / `response.function_call_arguments.delta` / `response.completed` | Both |
+| `usage: {input_tokens, output_tokens, cache_read_input_tokens}` | `usage: {input_tokens, output_tokens, input_tokens_details.cached_tokens}` | Reverse |
 
-Six modules, each under 150 lines, single responsibility:
+The active translation modules, each under 150 lines with a single responsibility:
 
-- `translation/forward.py` — Anthropic → OpenAI request translation
-- `translation/reverse.py` — OpenAI → Anthropic response translation
-- `translation/streaming.py` — Real-time SSE event stream adaptation
-- `translation/tools.py` — Tool schema conversion with enrichment hooks
+- `translation/responses_forward.py` — Anthropic Messages → Responses API request (primary path)
+- `translation/responses_reverse.py` — Responses API response → Anthropic content blocks
+- `translation/responses_streaming.py` — Responses semantic SSE events → Anthropic SSE stream
+- `translation/model_routing.py` — Endpoint detection (Responses default, `XAI_USE_CHAT_COMPLETIONS` override)
+- `translation/tools.py` — Tool schema conversion (Chat Completions + Responses shapes) with enrichment hook
+- `translation/shared.py` — Shared helpers (system flattening, tool enrichment wrapper)
 - `translation/config.py` — Model mapping, stop reason mapping, feature flags
-- `enrichment/system_preamble.py` — Behavioral conventions injection
+- `translation/forward.py` / `reverse.py` / `streaming.py` — Legacy Chat Completions path (retained for `XAI_USE_CHAT_COMPLETIONS=true`)
+- `enrichment/system_preamble.py` — Behavioral conventions + identity injection / stripping
+
+The `handlers/` package decides which entry point runs based on `XAI_USE_CHAT_COMPLETIONS`:
+
+- `handlers/responses.py` — Default handler for every model. Posts to `/v1/responses`, streams via the Responses adapter.
+- `handlers/chat_completions.py` — Legacy entry point. Preserves the original function signature but delegates to `handlers/responses.py` and tags the reply with an `X-Bridge-Warning` header noting the delegation.
+
+### Prompt Caching
+
+xAI's Responses API caches request prefixes automatically and returns cached input tokens at a **90% discount**. Cache affinity is controlled by the `x-grok-conv-id` request header, which routes all requests with the same ID to the same xAI server so the cache actually hits.
+
+The bridge generates one `x-grok-conv-id` per process (UUID, created at import time in `handlers/responses.py`) and sends it on every request. Cache hit telemetry surfaces in two places:
+
+- Per-request logs: `xAI Responses in 1.87s status=200 outputs=[...]` and a cache-prefix log line with a stable hash of the system prompt and tool definitions so you can watch prefix stability across requests.
+- Token logs (`bridge.tokens`): `cached_tokens` is extracted from `usage.input_tokens_details.cached_tokens` and passed through to the Anthropic-format `cache_read_input_tokens` field so Claude Code's own cost accounting reflects the savings.
+
+To enable prompt caching, keep the system prompt, tool definitions, and early conversation turns stable across requests within a session — that prefix is what gets cached. Editing earlier messages breaks the cache for that prefix. The bridge never rewrites prior messages, so caching works by default; just avoid bouncing `ENRICHMENT_MODE` or `GROK_MODEL` mid-session.
 
 ### Tool Enrichment
 
@@ -255,6 +292,8 @@ The enrichment engine transforms sparse tool definitions into rich, self-describ
 }
 ```
 
+All enrichment fields are folded into the final tool `description` at format-translation time (`translation/enrichment_folding.py`). The OpenAI / xAI function schema silently drops unknown fields, so the description is the only channel that reliably reaches the model. This keeps the enrichment layer model-agnostic and transport-agnostic — the same data survives both the Chat Completions and Responses tool shapes.
+
 The model now knows *what* the tool does, *why* it matters, and *when* to use it — the same knowledge that Claude learns through RL training, made explicit and portable.
 
 ## Testing
@@ -263,10 +302,13 @@ The model now knows *what* the tool does, *why* it matters, and *when* to use it
 # Run all tests
 pytest
 
-# 235+ tests across:
-# - Translation: forward, reverse, streaming, round-trip, edge cases
-# - Enrichment: structural patterns, behavioral dimensions, engine, config
-# - Integration: end-to-end request/response cycles
+# 713 tests across:
+# - Translation: Chat Completions + Responses API (forward, reverse, streaming, round-trip, edge cases)
+# - Model routing: endpoint detection, env var override
+# - Enrichment: structural patterns, behavioral dimensions, engine, enrichment folding
+# - Handlers: responses handler, chat_completions delegation
+# - Integration: end-to-end request/response cycles (no API key required, mocked)
+# - Live: optional tests gated on XAI_API_KEY
 # - Benchmarks: scoring accuracy, scenario validation, export formats
 ```
 
@@ -274,19 +316,31 @@ pytest
 
 ```
 claude-code-xai/
-├── main.py                  # FastAPI bridge application
+├── main.py                  # FastAPI bridge application and /v1/messages handler
 ├── manifest.json            # Agentic API Standard manifest (Pattern 1)
+├── handlers/                # Endpoint-specific request handlers
+│   ├── responses.py         # Default handler (posts to /v1/responses)
+│   └── chat_completions.py  # Legacy handler (delegates to responses)
 ├── translation/             # Bidirectional protocol translation
-│   ├── forward.py           # Anthropic Messages → OpenAI Chat
-│   ├── reverse.py           # OpenAI Chat → Anthropic Messages
-│   ├── streaming.py         # SSE event stream adaptation
-│   ├── tools.py             # Tool schema conversion + enrichment hooks
-│   └── config.py            # Model mapping, feature flags
+│   ├── model_routing.py     # Endpoint detection (Responses default, XAI_USE_CHAT_COMPLETIONS override)
+│   ├── responses_forward.py # Anthropic Messages → xAI Responses request (primary)
+│   ├── responses_reverse.py # xAI Responses → Anthropic content blocks
+│   ├── responses_streaming.py # Responses semantic SSE → Anthropic SSE adapter
+│   ├── forward.py           # Legacy: Anthropic Messages → OpenAI Chat Completions
+│   ├── reverse.py           # Legacy: OpenAI Chat Completions → Anthropic Messages
+│   ├── streaming.py         # Legacy: OpenAI SSE → Anthropic SSE adapter
+│   ├── tools.py             # Tool schema conversion (both shapes) with enrichment hook
+│   ├── enrichment_folding.py # Folds enrichment fields into tool descriptions
+│   ├── shared.py            # Shared translation helpers (flatten_system, tool enrichment)
+│   └── config.py            # Model mapping, feature flags, translation defaults
+├── bridge/                  # Cross-cutting infrastructure
+│   ├── logging_config.py    # bridge.* logger hierarchy, request sanitization, JSON dumps
+│   └── token_logger.py      # Per-request token accounting with cache metrics
 ├── enrichment/              # Two-layer tool enrichment engine
 │   ├── engine.py            # Pipeline orchestrator
-│   ├── factory.py           # Configured enricher creation
-│   ├── config.py            # Mode selection (passthrough/structural/full)
-│   ├── system_preamble.py   # Behavioral conventions injection
+│   ├── factory.py           # Configured enricher creation (reads ENRICHMENT_MODE)
+│   ├── structure_loader.py  # YAML loader with mtime-based lazy reload
+│   ├── system_preamble.py   # Behavioral + identity injection / stripping
 │   ├── system_preamble.md   # Preamble documentation
 │   ├── structural/          # Layer 1: API Standard patterns
 │   │   ├── manifest.py      # P1: Machine-Readable Manifest
@@ -315,7 +369,7 @@ claude-code-xai/
 │   ├── behavioral/          # WHAT/WHY/WHEN per tool (3 files)
 │   ├── structural/          # API Standard patterns per tool (8 files)
 │   └── preamble/            # Identity and conventions (2 files)
-├── tests/                   # 490+ tests
+├── tests/                   # 713 tests
 └── docker-compose.yml       # One-command deployment
 ```
 
@@ -477,6 +531,10 @@ No restart. No rebuild. No redeployment. The bridge is always serving the latest
 Static enrichment is a snapshot of what we knew when we built it. Dynamic enrichment lets the system learn. An agent that discovers "Grok works better when the Edit tool description mentions line-count validation" can wire that knowledge in immediately -- and every subsequent request benefits.
 
 This is the path from "bridge" to "living enrichment layer." Enrichment definitions evolve based on real usage, not just developer intuition.
+
+## Future Considerations
+
+The bridge currently speaks to xAI through `httpx.AsyncClient` posted directly against `/v1/responses`. The official [xAI Python SDK](https://github.com/xai-org/xai-sdk-python) is a candidate for evaluation — it may simplify the streaming adapter and tool-call handling, particularly around the semantic SSE event stream, by providing higher-level abstractions over the wire format. This is an evaluation item, not a migration commitment: no benchmarks have been run, no behavioral equivalence has been verified, and raw `httpx` remains the right choice today for the control it gives us over translation and enrichment injection points. Worth revisiting when the SDK's feature surface or maintenance profile materially changes.
 
 ## Built By
 

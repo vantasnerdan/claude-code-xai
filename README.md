@@ -532,6 +532,10 @@ Static enrichment is a snapshot of what we knew when we built it. Dynamic enrich
 
 This is the path from "bridge" to "living enrichment layer." Enrichment definitions evolve based on real usage, not just developer intuition.
 
+## Future Considerations
+
+The bridge currently speaks to xAI through `httpx.AsyncClient` posted directly against `/v1/responses`. The official [xAI Python SDK](https://github.com/xai-org/xai-sdk-python) is a candidate for evaluation — it may simplify the streaming adapter and tool-call handling, particularly around the semantic SSE event stream, by providing higher-level abstractions over the wire format. This is an evaluation item, not a migration commitment: no benchmarks have been run, no behavioral equivalence has been verified, and raw `httpx` remains the right choice today for the control it gives us over translation and enrichment injection points. Worth revisiting when the SDK's feature surface or maintenance profile materially changes.
+
 ## Built By
 
 This project was designed, implemented, tested, and documented by an AI agent team:
